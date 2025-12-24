@@ -255,160 +255,16 @@
         .phone-screen {
             width: 100%;
             height: 100%;
-            background: var(--bg-primary);
             border-radius: 40px;
             overflow: hidden;
             position: relative;
         }
 
-        .phone-notch {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 120px;
-            height: 30px;
-            background: #000;
-            border-radius: 0 0 20px 20px;
-            z-index: 10;
-        }
-
-        .phone-content {
-            padding: 50px 20px 20px;
+        .phone-screen img {
+            width: 100%;
             height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .phone-header {
-            text-align: left;
-            margin-bottom: 16px;
-        }
-
-        .phone-header h3 {
-            font-size: 1.75rem;
-            font-weight: 700;
-        }
-
-        .phone-progress {
-            background: var(--bg-secondary);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-
-        .progress-ring {
-            width: 60px;
-            height: 60px;
-            margin-right: 16px;
-            float: left;
-        }
-
-        .progress-ring circle {
-            fill: none;
-            stroke-width: 6;
-        }
-
-        .progress-ring .bg {
-            stroke: var(--bg-tertiary);
-        }
-
-        .progress-ring .progress {
-            stroke: var(--accent);
-            stroke-linecap: round;
-            stroke-dasharray: 157;
-            stroke-dashoffset: 47;
-            transform: rotate(-90deg);
-            transform-origin: center;
-            animation: progressFill 2s ease-out 1s both;
-        }
-
-        @keyframes progressFill {
-            from { stroke-dashoffset: 157; }
-            to { stroke-dashoffset: 47; }
-        }
-
-        .progress-text {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-        }
-
-        .progress-text strong {
-            display: block;
-            font-size: 1rem;
-            color: var(--text-primary);
-            margin-bottom: 2px;
-        }
-
-        .habit-list {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .habit-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: var(--bg-secondary);
-            padding: 14px;
-            border-radius: 14px;
-            animation: slideIn 0.5s ease-out both;
-        }
-
-        .habit-item:nth-child(1) { animation-delay: 1.2s; }
-        .habit-item:nth-child(2) { animation-delay: 1.4s; }
-        .habit-item:nth-child(3) { animation-delay: 1.6s; }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        .habit-check {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-        }
-
-        .habit-check.done {
-            background: var(--accent);
-            color: white;
-        }
-
-        .habit-check.pending {
-            background: var(--bg-tertiary);
-            color: var(--text-tertiary);
-        }
-
-        .habit-info {
-            flex: 1;
-            text-align: left;
-        }
-
-        .habit-info span {
-            display: block;
-            font-size: 0.95rem;
-            font-weight: 600;
-        }
-
-        .habit-info small {
-            font-size: 0.75rem;
-            color: var(--text-tertiary);
-        }
-
-        .habit-streak {
-            background: var(--accent-soft);
-            color: var(--accent);
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
+            object-fit: cover;
+            object-position: top;
         }
 
         /* Floating elements */
@@ -691,48 +547,7 @@
             </div>
             <div class="phone-frame">
                 <div class="phone-screen">
-                    <div class="phone-notch"></div>
-                    <div class="phone-content">
-                        <div class="phone-header">
-                            <h3>Today</h3>
-                        </div>
-                        <div class="phone-progress">
-                            <svg class="progress-ring" viewBox="0 0 60 60">
-                                <circle class="bg" cx="30" cy="30" r="25"/>
-                                <circle class="progress" cx="30" cy="30" r="25"/>
-                            </svg>
-                            <div class="progress-text">
-                                <strong>Today's Progress</strong>
-                                2 of 3 habits done
-                            </div>
-                            <div style="clear: both;"></div>
-                        </div>
-                        <div class="habit-list">
-                            <div class="habit-item">
-                                <div class="habit-check done">✓</div>
-                                <div class="habit-info">
-                                    <span>Morning Run</span>
-                                    <small>Completed</small>
-                                </div>
-                                <div class="habit-streak">🔥 12</div>
-                            </div>
-                            <div class="habit-item">
-                                <div class="habit-check done">✓</div>
-                                <div class="habit-info">
-                                    <span>Read 30 mins</span>
-                                    <small>30/30 min</small>
-                                </div>
-                                <div class="habit-streak">🔥 7</div>
-                            </div>
-                            <div class="habit-item">
-                                <div class="habit-check pending">○</div>
-                                <div class="habit-info">
-                                    <span>Meditate</span>
-                                    <small>Not completed</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <img src="screenshot.png" alt="HabitFlame App Screenshot">
                 </div>
             </div>
         </div>
