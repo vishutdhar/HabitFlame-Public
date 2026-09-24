@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://vishutdhar.github.io/HabitFlame-Public/sitemap.xml
