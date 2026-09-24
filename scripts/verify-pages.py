@@ -18,7 +18,7 @@ import re
 import sys
 import types
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GEN_PATH = ROOT / "scripts" / "build-pages.py"
@@ -163,8 +163,13 @@ def whole_or_plural(phrase: str) -> re.Pattern:
     return re.compile(r"(?<!\w)" + re.escape(phrase) + r"(?:es|s)?(?!\w)", re.I)
 
 
+# A sentence ends at . ! or ? followed by an optional closing quote or bracket
+# and whitespace, so a closing quotation mark never glues two sentences.
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\"')\]\u201d\u2019])\s+")
+
+
 def sentences(text: str) -> list[str]:
-    return [s for s in re.split(r"(?<=[.!?])\s+", text) if s]
+    return [s for s in SENTENCE_END.split(text) if s]
 
 
 def words_with_spans(text: str) -> list[tuple[str, int, int]]:
@@ -189,12 +194,19 @@ check(SITE["name"] == PINNED_NAME, f"site.name is {SITE['name']!r}, pinned {PINN
 
 # ---- 3. The one date --------------------------------------------------------
 
-try:
-    datetime.date.fromisoformat(SITE.get("lastmod", ""))
-    LASTMOD_OK = True
-except (TypeError, ValueError):
-    LASTMOD_OK = False
-    failures.append(f"site.lastmod {SITE.get('lastmod')!r} is not an ISO date (YYYY-MM-DD)")
+def iso_date(value) -> bool:
+    """Exactly YYYY-MM-DD and a real date. fromisoformat alone also accepts
+    forms such as 20260924 and 2026-W39-4."""
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
+
+
+check(iso_date(SITE.get("lastmod")), f"site.lastmod {SITE.get('lastmod')!r} is not a YYYY-MM-DD date")
 
 # ---- 5. Facts and the number allowlist --------------------------------------
 
@@ -278,6 +290,51 @@ def visible_units(root: Node) -> list[tuple[str, Node, "Node | None"]]:
 
 premium_word = whole("Premium")
 free_word = whole("free")
+TIMER_MINUTES = {FACTS["pomodoro_work_minutes"], FACTS["pomodoro_short_break_minutes"], FACTS["pomodoro_long_break_minutes"]}
+# A number no binding claims must be a streak milestone, part of the multi
+# check-in range or a listed extra.
+UNBOUND_OK = set(FACTS["streak_milestones"]) | set(FACTS["multi_checkin_range"]) | EXTRA_ALLOWED_NUMBERS
+PERIOD_WORDS = {"month", "monthly", "year", "yearly", "annual", "week"}
+TOKEN = re.compile(r"\$?\d+(?:\.\d+)?|[A-Za-z']+")
+premium_free_forms = {f.lower(): 0 for f in FACTS.get("premium_free_forms", [])}
+
+
+def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]]:
+    """Each number in text with the problem its context finds, or None.
+    ctx is {"label": row label, "col": column head} for a table cell."""
+    toks = list(TOKEN.finditer(text))
+    free_ctx = bool(free_word.search(text)) or bool(ctx and ctx["col"] == "Free")
+    nudge_ctx = bool(re.search(r"\bnudges?\b", text, re.I)) or bool(ctx and re.search(r"nudge", ctx["label"], re.I))
+    habit_cell = bool(ctx and re.fullmatch(r"habits?", ctx["label"], re.I))
+    out = []
+    for i, m in enumerate(toks):
+        s = m.group(0)
+        if not (s[0].isdigit() or s[0] == "$"):
+            continue
+        num = s.lstrip("$")
+        nxt = [x.group(0).lower() for x in toks[i + 1:i + 5]]
+        if s.startswith("$"):
+            if s != FACTS["price"]:
+                out.append((num, f"amount {s} is not facts.price {FACTS['price']}"))
+            elif any(w in PERIOD_WORDS for w in nxt[:4]):
+                out.append((num, f"amount {s} is followed by a billing period"))
+            else:
+                out.append((num, None))
+        elif any(w in ("minute", "minutes") for w in nxt[:2]):
+            out.append((num, None if num in TIMER_MINUTES else f"'{num} minute' is not a timer value {sorted(TIMER_MINUTES, key=int)}"))
+        elif any(w in ("achievement", "achievements", "badge", "badges") for w in nxt[:2]):
+            out.append((num, None if num == FACTS["achievement_badges"] else f"'{num} badges' is not facts.achievement_badges {FACTS['achievement_badges']}"))
+        elif any(w in ("nudge", "nudges") for w in nxt[:2]) or (nudge_ctx and nxt[:2] == ["a", "month"]):
+            out.append((num, None if num == FACTS["free_nudges_per_month"] else f"'{num}' nudges is not facts.free_nudges_per_month {FACTS['free_nudges_per_month']}"))
+        elif any(w in ("habit", "habits") for w in nxt[:2]) and (free_ctx or "limit" in nxt[:2]):
+            out.append((num, None if num == FACTS["free_habit_limit"] else f"'{num} habits' about the free tier is not facts.free_habit_limit {FACTS['free_habit_limit']}"))
+        elif habit_cell and free_ctx and text.strip() == s:
+            out.append((num, None if num == FACTS["free_habit_limit"] else f"Habits under Free is {num}, not facts.free_habit_limit {FACTS['free_habit_limit']}"))
+        elif num in UNBOUND_OK:
+            out.append((num, None))
+        else:
+            out.append((num, f"number {num} is not bound to a fact and is not a milestone, the multi check-in range or a listed extra"))
+    return out
 premium_phrases = [(p, whole(p)) for p in FACTS["premium_only"]]
 banned = [(p, whole_or_plural(p)) for p in FACTS["banned_phrases"]]
 negated = [(p, whole_or_plural(p)) for p in FACTS.get("negated_only", [])]
@@ -287,7 +344,12 @@ NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?")
 DOLLAR = re.compile(r"\$\d+(?:\.\d+)?")
 HABIT_COUNT = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?) habits?(?!\w)", re.I)
 NUDGE_COUNT = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?) nudges?(?!\w)", re.I)
-EMAIL = re.compile(r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+EMAIL = re.compile(r"(?:\"[^\"\r\n<>]+\"|[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+)@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+
+
+def emails_in(text: str) -> set[str]:
+    """Addresses in the raw source and in its entity-decoded form."""
+    return set(EMAIL.findall(text)) | set(EMAIL.findall(htmlmod.unescape(text)))
 
 word_counts: list[tuple[str, int]] = []
 
@@ -328,7 +390,7 @@ for page, rel in HTML_PAGES:
         return bool(comp_rx and comp_rx.search(text))
 
     units: list[tuple[str, bool, str]] = []  # (text, exempt, where)
-    number_units: list[tuple[str, bool, str]] = []
+    number_units: list[tuple[str, bool, str, "dict | None"]] = []
     for text, node, table in visible_units(body) if body else []:
         if table is not None and node.tag in {"th", "td"}:
             head = table_head(table)
@@ -338,16 +400,19 @@ for page, rel in HTML_PAGES:
             exempt = bool(competitor) and in_body and competitor in head and (col == 0 or (0 <= col < len(head) and head[col] == competitor))
             label = f"table cell (column {head[col]!r})" if 0 <= col < len(head) else "table cell"
             parts = [(text, exempt, label)]
+            cell_ctx = {"label": row_cells(tr)[0].text() if tr is not None else "", "col": head[col] if 0 <= col < len(head) else ""}
         elif node.tag == "h1":
             parts = [(s, False, "h1") for s in sentences(text)]
+            cell_ctx = None
         else:
             parts = [(s, names_competitor(s), node.tag) for s in sentences(text)]
+            cell_ctx = None
         units += parts
         if node is not footer_copy:
-            number_units += parts
+            number_units += [(*u, cell_ctx) for u in parts]
     for text, where in [(title, "title"), (description, "meta description")]:
         units.append((text, bool(competitor), where))
-        number_units.append((text, bool(competitor), where))
+        number_units.append((text, bool(competitor), where, None))
     for key, value in [("og:title", meta(root, "property", "og:title")), ("og:description", meta(root, "property", "og:description")),
                        ("twitter:title", meta(root, "name", "twitter:title")), ("twitter:description", meta(root, "name", "twitter:description"))]:
         if value:
@@ -376,48 +441,51 @@ for page, rel in HTML_PAGES:
                 yield from ld_strings(v)
     units += list(ld_strings(graph))
 
-    # b. Every number in visible text is an allowed fact (competitor numbers only where exempt).
-    for text, exempt, where in number_units:
+    # b. Every number is an allowed fact, and bound to the right fact by its
+    #    context: minutes, badges, nudges, free habits and dollar amounts.
+    #    Competitor numbers pass only where the competitor rule exempts them.
+    for text, exempt, where, ctx in number_units:
         for num in NUMBER.findall(text):
             if num in allowed_numbers or (num in comp_numbers and exempt):
                 continue
             extra = " (a competitor number outside the places the competitor rule allows)" if num in comp_numbers else ""
             failures.append(f"{rel}: number {num} is not in facts.allowed_numbers{extra}, in {where}: {text!r}")
-        # 5. Amounts and limits must be the fact, not merely an allowed number.
-        for amount in DOLLAR.findall(text):
-            if amount != FACTS["price"]:
-                failures.append(f"{rel}: amount {amount} is not facts.price {FACTS['price']}, in {where}: {text!r}")
-        if free_word.search(text):
-            for n in HABIT_COUNT.findall(text):
-                if n != FACTS["free_habit_limit"]:
-                    failures.append(f"{rel}: '{n} habits' in a sentence about free is not facts.free_habit_limit {FACTS['free_habit_limit']}: {text!r}")
-        for n in NUDGE_COUNT.findall(text):
-            if n != FACTS["free_nudges_per_month"]:
-                failures.append(f"{rel}: '{n} nudges' is not facts.free_nudges_per_month {FACTS['free_nudges_per_month']}: {text!r}")
+        for num, problem in bind_numbers(text, ctx):
+            if problem and not (num in comp_numbers and exempt):
+                failures.append(f"{rel}: {problem}, in {where}: {text!r}")
     if footer_copy is not None:
         check(footer_copy.text() == f"© {gen.YEAR} HabitFlame", f"{rel}: footer copyright line changed: {footer_copy.text()!r}")
 
-    # c. Premium-only features are only ever named next to the word Premium,
-    #    and never within six words of "free", Premium or not.
+    # c. Premium-only features are only ever named next to the word Premium.
+    #    A sentence with the word "free" and a Premium-only feature fails
+    #    unless it is, word for word, one of facts.premium_free_forms.
+    def premium_free(sentence: str, where: str) -> None:
+        if free_word.search(sentence) and any(rx.search(sentence) for _, rx in premium_phrases):
+            key = re.sub(r"\s+", " ", sentence).strip().lower()
+            if key in premium_free_forms:
+                premium_free_forms[key] += 1
+            else:
+                failures.append(f"{rel}: {where} has 'free' and a Premium-only feature and is not in facts.premium_free_forms: {sentence!r}")
+
     for unit in page_text_units(root) + [title, description]:
         for sentence in sentences(unit):
-            words = words_with_spans(sentence)
-            free_idx = [i for i, (w, _, _) in enumerate(words) if w.strip("'.") == "free"]
             for phrase, rx in premium_phrases:
-                for m in rx.finditer(sentence):
-                    if not premium_word.search(sentence):
-                        kind = "free sentence" if free_word.search(sentence) else "sentence"
-                        failures.append(f"{rel}: {kind} names Premium-only '{phrase}' without 'Premium': {sentence!r}")
-                    span = [i for i, (_, s, e) in enumerate(words) if s >= m.start() and e <= m.end()]
-                    if span and any(span[0] - 6 <= i < span[0] or span[-1] < i <= span[-1] + 6 for i in free_idx):
-                        failures.append(f"{rel}: Premium-only '{phrase}' within six words of 'free': {sentence!r}")
+                if rx.search(sentence) and not premium_word.search(sentence):
+                    kind = "free sentence" if free_word.search(sentence) else "sentence"
+                    failures.append(f"{rel}: {kind} names Premium-only '{phrase}' without 'Premium': {sentence!r}")
+            premium_free(sentence, "sentence")
     for table in by_tag(root, "table"):
         head = table_head(table)
         comp_heads = [["", competitor, "HabitFlame"], ["", "HabitFlame", competitor]] if competitor else []
+        for tr in by_tag(first(table, lambda n: n.tag == "tbody") or table, "tr"):
+            for c in row_cells(tr):
+                premium_free(c.text(), "table cell")
         if head == GUIDE_TABLE_HEAD:
             free_col = head.index("Free")
             for tr in by_tag(first(table, lambda n: n.tag == "tbody") or table, "tr"):
                 cells = [c.text() for c in row_cells(tr)]
+                if free_col < len(cells) and any(rx.search(cells[free_col]) for _, rx in premium_phrases):
+                    failures.append(f"{rel}: Free column cell names a Premium-only feature: {cells[free_col]!r}")
                 if any(rx.search(cells[0]) for _, rx in premium_phrases) or cells[0].lower() in {p.lower() for p in FACTS["premium_only"]}:
                     check(free_col < len(cells) and cells[free_col].lower() in {"no", "not included"},
                           f"{rel}: table row {cells[0]!r} marks a Premium-only feature as available under Free")
@@ -449,23 +517,26 @@ for page, rel in HTML_PAGES:
                     continue
                 failures.append(f"{rel}: '{phrase}' outside every facts.negated_forms entry, in {where}: {text!r}")
 
-    # e. Links, store link, brand footer, contact email.
+    # e. Links, store link, brand footer, contact email. Internal hrefs are
+    #    resolved as a browser would; a path with an empty or dot segment fails
+    #    outright, and the result must sit under base_url and map to a file.
     for n in root.walk():
         for attr in ("href", "src"):
             href = n.attrs.get(attr)
             if href is None or href.startswith(("mailto:", "tel:")):
                 continue
-            if href.startswith("#"):
-                target_url = url + href
-            elif href.startswith(BASE + "/") or href == BASE:
-                target_url = href
-            elif re.match(r"^[a-z][a-z0-9+.-]*:|^//", href, re.I):
-                continue  # external
-            else:
-                target_url = urljoin(url, href)
-                if not target_url.startswith(BASE + "/"):
-                    failures.append(f"{rel}: relative link {href!r} escapes the site")
-                    continue
+            split = urlsplit(href)
+            if split.scheme or split.netloc:
+                if not href.startswith(BASE + "/") and href != BASE:
+                    continue  # external
+            path = split.path
+            if "//" in path or "/./" in path or "/../" in path or path.startswith(("./", "../")) or path.endswith(("/.", "/..")) or path in (".", ".."):
+                failures.append(f"{rel}: link {href!r} has an empty or dot path segment")
+                continue
+            target_url = urljoin(url, href)
+            if not target_url.startswith(BASE + "/"):
+                failures.append(f"{rel}: link {href!r} resolves to {target_url}, outside {BASE}/")
+                continue
             path_part, _, frag = target_url[len(BASE):].partition("#")
             path_part = path_part.split("?", 1)[0].lstrip("/")
             fpath = ROOT / path_part
@@ -485,7 +556,7 @@ for page, rel in HTML_PAGES:
     brand = footer and first(footer, lambda n: n.tag == "a" and n.attrs.get("href") == BRAND_URL)
     check(bool(brand) and brand.text() == BRAND_TEXT, f"{rel}: footer lacks <a href=\"{BRAND_URL}\">{BRAND_TEXT}</a>")
     check("nofollow" not in raw.lower(), f"{rel}: contains nofollow")
-    emails = set(EMAIL.findall(raw))
+    emails = emails_in(raw)
     check(emails <= {SITE["contact_email"]}, f"{rel}: unexpected email addresses {sorted(emails - {SITE['contact_email']})}")
     check(SITE["contact_email"] in emails, f"{rel}: contact email missing")
 
@@ -548,23 +619,83 @@ for page, rel in HTML_PAGES:
 for form, count in negated_forms_used.items():
     check(count > 0, f"facts.negated_forms has {form!r}, which no page uses (remove it)")
 
+# c. Every allowlisted free and Premium sentence is one the copy uses.
+for form, count in premium_free_forms.items():
+    check(count > 0, f"facts.premium_free_forms has {form!r}, which no page uses (remove it)")
+
+# l. Text colors in styles.css meet 4.5:1 in both themes.
+CSS = (ROOT / "styles.css").read_text(encoding="utf-8")
+
+
+def css_vars(block: str) -> dict[str, str]:
+    return {k: v.strip() for k, v in re.findall(r"--([\w-]+):\s*([^;]+);", block)}
+
+
+def css_rule(selector: str) -> dict[str, str]:
+    m = re.search(r"(?m)^" + re.escape(selector) + r"\s*\{([^}]*)\}", CSS)
+    return {k.strip(): v.strip() for k, v in re.findall(r"([\w-]+)\s*:\s*([^;]+);", m.group(1))} if m else {}
+
+
+def css_color(value: str, env: dict[str, str]) -> str:
+    for _ in range(5):
+        m = re.fullmatch(r"var\(--([\w-]+)\)", value.strip())
+        if not m:
+            break
+        value = env[m.group(1)]
+    value = value.strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{3}", value):
+        value = "#" + "".join(ch * 2 for ch in value[1:])
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+        raise ValueError(f"not a hex color: {value!r}")
+    return value
+
+
+def contrast(a: str, b: str) -> float:
+    def lum(h: str) -> float:
+        rgb = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        rgb = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+dark_m = re.search(r"(?m)^:root\s*\{([^}]*)\}", CSS)
+light_m = re.search(r'@media \(prefers-color-scheme: light\)\s*\{\s*:root:not\(\[data-theme="dark"\]\)\s*\{([^}]*)\}', CSS)
+check(bool(dark_m and light_m), "styles.css: cannot find the dark :root block or the light theme block")
+contrast_lines = []
+if dark_m and light_m:
+    dark_env = css_vars(dark_m.group(1))
+    themes = {"dark": dark_env, "light": {**dark_env, **css_vars(light_m.group(1))}}
+    store, hover = css_rule(".store"), css_rule(".store:hover")
+    for theme, env in themes.items():
+        pairs = [(f"--{t} on --{b}", env[t], env[b]) for t in ("ink", "ink-2", "ink-3", "link") for b in ("bg", "bg-2")]
+        pairs += [("store button", store.get("color", ""), store.get("background", "")),
+                  ("store button hover", hover.get("color", ""), hover.get("background", ""))]
+        worst = []
+        for name, fg, bg in pairs:
+            try:
+                ratio = contrast(css_color(fg, env), css_color(bg, env))
+            except (KeyError, ValueError) as e:
+                failures.append(f"styles.css {theme}: {name}: {e}")
+                continue
+            worst.append((ratio, name))
+            check(ratio >= 4.5, f"styles.css {theme}: {name} is {ratio:.2f}:1, below 4.5:1")
+        if worst:
+            r, name = min(worst)
+            contrast_lines.append(f"contrast {theme}: lowest {r:.2f}:1 ({name}) of {len(worst)} pairs")
+
 # h. Prose hygiene.
 DASHES = {0x2012, 0x2013, 0x2014, 0x2015, 0x2212}
 PICTO_RANGES = [(0x1F000, 0x10FFFF), (0x2600, 0x27BF), (0x2B00, 0x2BFF), (0x2300, 0x23FF), (0x2190, 0x21FF),
-                (0xFE00, 0xFE0F), (0x200D, 0x200D), (0x3030, 0x3030), (0x303D, 0x303D), (0x3297, 0x3297), (0x3299, 0x3299)]
+                (0xFE00, 0xFE0F), (0x200D, 0x200D), (0x20D0, 0x20FF), (0x3030, 0x3030), (0x303D, 0x303D), (0x3297, 0x3297), (0x3299, 0x3299)]
 
 
 def pictographic(cp: int) -> bool:
     return any(lo <= cp <= hi for lo, hi in PICTO_RANGES)
 
 
-# The in-script list is the source of truth, stored rot13 so this file never
-# spells the names it bans. The shared list on this machine is read as an
-# extra when it exists; it is never required.
+# The only list, stored rot13 so this file never spells the names it bans.
 TOOL_NAMES = {codecs.decode(w, "rot13") for w in ("pynhqr", "pbqrk", "tcg", "naguebcvp", "bcranv")}
-TOOL_NAMES_EXTRA = pathlib.Path("/Users/vishutdhar/Code/HabitFlame/.derived-flakefix/toolnames.txt")
-if TOOL_NAMES_EXTRA.is_file():
-    TOOL_NAMES |= {w.strip().lower() for w in TOOL_NAMES_EXTRA.read_text(encoding="utf-8").split() if w.strip()}
 tool_rx = [(w, whole(w)) for w in sorted(TOOL_NAMES)]
 
 hygiene_files = {
@@ -624,12 +755,12 @@ for u in locs:
     check(f.is_file(), f"sitemap.xml: {u} does not resolve to a file")
 # j. The privacy policy (hand written, not generated) says what the app does.
 POLICY = (ROOT / "privacy-policy.html").read_text(encoding="utf-8")
-for must in ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings", SITE["contact_email"]):
+for must in ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings", "weekly count", SITE["contact_email"]):
     check(must in POLICY, f"privacy-policy.html: missing {must!r}")
 for stale in ("We do not collect any personal information", "do not use analytics", "do not have servers",
               "does not integrate with any third-party analytics"):
     check(stale.lower() not in POLICY.lower(), f"privacy-policy.html: still says {stale!r}")
-policy_emails = set(EMAIL.findall(POLICY))
+policy_emails = emails_in(POLICY)
 check(policy_emails == {SITE["contact_email"]}, f"privacy-policy.html: email addresses {sorted(policy_emails)}")
 
 # k. The inline link form in pages.json never reaches a page unrendered.
@@ -641,6 +772,8 @@ check(FRESH["robots.txt"] == f"User-agent: *\nAllow: /\nSitemap: {PINNED_BASE_UR
 
 # ---- Report ------------------------------------------------------------------
 print(f"sitemap lastmod {SITE.get('lastmod')}")
+for line in contrast_lines:
+    print(line)
 for name, n in word_counts:
     print(f"words  {n:5d}  {name}")
 for note in notes:

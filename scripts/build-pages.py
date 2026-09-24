@@ -310,7 +310,9 @@ def sitemap_urls() -> list[str]:
 
 def render_sitemap() -> str:
     date = SITE["lastmod"]
-    datetime.date.fromisoformat(date)  # reject a malformed date loudly
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        raise ValueError(f"site.lastmod must be YYYY-MM-DD, got {date!r}")
+    datetime.date.fromisoformat(date)  # and a real date
     entries = "\n".join(f"  <url>\n    <loc>{esc(u)}</loc>\n    <lastmod>{date}</lastmod>\n  </url>"
                         for u in sitemap_urls())
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
