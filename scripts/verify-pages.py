@@ -876,7 +876,8 @@ check(bool(push) and "have Premium and complete" in norm(re.sub(r"\s+", " ", pus
 SUPPORT = (ROOT / "support.html").read_text(encoding="utf-8")
 SUPPORT_TEXT = norm(htmlmod.unescape(re.sub(r"<[^>]+>", " ", SUPPORT)))
 for false_sentence in ("With Premium, iCloud sync keeps your habits synchronized across all your devices automatically.",
-                       "With Premium, iCloud sync keeps your habits in sync across all your iPhone and iPad devices."):
+                       "With Premium, iCloud sync keeps your habits in sync across all your iPhone and iPad devices.",
+                       "Your streak will reset, but don't worry!"):
     check(false_sentence not in SUPPORT_TEXT, f"support.html: still says {false_sentence!r}")
 for s in sentences(re.sub(r"\s+", " ", SUPPORT_TEXT)):
     if re.search(r"\biCloud\b", s) and re.search(r"\bPremium\b", s):

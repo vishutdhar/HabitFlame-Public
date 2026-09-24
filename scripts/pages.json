@@ -148,7 +148,7 @@
           {"q": "Does my accountability partner need to buy Premium?", "a": "No. Premium is needed on the side of the person whose completions are sent. If you buy it, your partner receives your updates without paying. If only one of you has Premium, that person's completions arrive instantly and the other person's show only in the combined weekly count."},
           {"q": "Can I have more than one accountability partner?", "a": "Yes. You can pair with several people and choose which habits each of them can follow."},
           {"q": "What does my partner see?", "a": "With Premium on your side, whether each shared habit is done today, your streak on it and milestone and streak-at-risk alerts. Without it, a combined weekly count of what you both completed, plus your nudges. Habits you do not share are never sent."},
-          {"q": "Does my partner have to be on iPhone?", "a": "Yes. HabitFlame is an iPhone and iPad app, so both people need an Apple device with the app installed."},
+          {"q": "Does my partner have to be on iPhone or iPad?", "a": "Yes. HabitFlame is an iPhone and iPad app, so both people need an iPhone or iPad with the app installed."},
           {"q": "What happens if my partner does not open the invite?", "a": "Nothing changes on your side. Your habits keep tracking as normal, and you can resend the link or invite someone else."}
         ]}
       ]
@@ -419,7 +419,7 @@
         {"faq": [
           {"q": "Is HabitFlame free like HabitShare?", "a": "HabitFlame is free for up to 5 habits, including the partner feature, streaks, widgets, reminders and the focus timer. Sending each completion to your partner needs Premium. Premium is a one-time $9.99 purchase for unlimited habits, habit stacking, smart insights, real-time partner updates and unlimited nudges. HabitShare is free with no paid tier listed."},
           {"q": "Does HabitFlame have messaging like HabitShare?", "a": "No. HabitFlame keeps the partner feature to reactions and nudges, and leaves the conversation to wherever you already talk. HabitShare includes messaging and comments."},
-          {"q": "Can a friend without an iPhone pair with me in HabitFlame?", "a": "No. HabitFlame is an iPhone and iPad app, so both people need an Apple device. HabitShare has an Android version."},
+          {"q": "Can a friend without an iPhone pair with me in HabitFlame?", "a": "Only with an iPhone or iPad. HabitFlame runs on those two devices, so both people need one. HabitShare has an Android version."},
           {"q": "Can I use both apps?", "a": "Yes. Nothing stops you from tracking in one and sharing in the other, though most people settle on one so the streak lives in one place."}
         ]}
       ]
