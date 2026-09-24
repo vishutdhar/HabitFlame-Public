@@ -17,6 +17,7 @@ import pathlib
 import re
 import sys
 import types
+import unicodedata
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
@@ -165,11 +166,30 @@ def whole_or_plural(phrase: str) -> re.Pattern:
 
 # A sentence ends at . ! or ? followed by an optional closing quote or bracket
 # and whitespace, so a closing quotation mark never glues two sentences.
-SENTENCE_END = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\"')\]\u201d\u2019])\s+")
+# Text is normalised before any phrase check: NFKC, curly quotes and
+# apostrophes to straight ones, hyphen variants to "-".
+NORM_MAP = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
+                          "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
+                          "\u2010": "-", "\u2011": "-", "\u00ad": "-", "\u2212": "-"})
+
+
+def norm(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).translate(NORM_MAP)
+
+
+# A sentence ends at . ! or ? plus any run of closing quotes or brackets
+# (straight or curly, single or double), then whitespace.
+SENTENCE_END = re.compile(r"[.!?][\"'\u2018\u2019\u201c\u201d)\]]*\s+")
 
 
 def sentences(text: str) -> list[str]:
-    return [s for s in SENTENCE_END.split(text) if s]
+    text = norm(text)
+    out, pos = [], 0
+    for m in SENTENCE_END.finditer(text):
+        out.append(text[pos:m.end()].strip())
+        pos = m.end()
+    out.append(text[pos:].strip())
+    return [s for s in out if s]
 
 
 def words_with_spans(text: str) -> list[tuple[str, int, int]]:
@@ -191,6 +211,28 @@ check(SITE["base_url"] == PINNED_BASE_URL, f"site.base_url is {SITE['base_url']!
 check(BASE == PINNED_BASE_URL, f"generator base is {BASE!r}, pinned {PINNED_BASE_URL!r}")
 check(SITE["app_store_url"] == PINNED_APP_STORE_URL, f"site.app_store_url is {SITE['app_store_url']!r}, pinned {PINNED_APP_STORE_URL!r}")
 check(SITE["name"] == PINNED_NAME, f"site.name is {SITE['name']!r}, pinned {PINNED_NAME!r}")
+
+# ---- 9. Minimum lists pages.json may extend but never shrink ----------------
+
+REQUIRED_BANNED = {
+    "google play", "web app", "browser version", "mac app", "apple watch", "watch app",
+    "custom app icon", "duo quest", "weekly quest", "quest", "free trial",
+    "thousands of", "millions", "million", "guarantee", "guaranteed", "proven to", "clinically", "scientifically",
+    "#1", "number one", "best habit app", "world's best",
+    "ai-powered", "ai powered", "artificial intelligence", "machine learning",
+    "unlimited free", "free forever", "lifetime free",
+    "shared streak", "joint streak", "couple streak", "team streak",
+    "chat", "messaging", "video call", "leaderboard", "challenge",
+    "no analytics", "no tracking", "no servers", "never leaves your device", "not accessible by",
+}
+REQUIRED_PREMIUM_ONLY = {
+    "unlimited habits", "habit stacking", "smart insights", "real-time partner updates",
+    "instant partner notifications", "unlimited partner nudges", "unlimited nudges", "stack habits", "stacking",
+}
+REQUIRED_NEGATED_ONLY = {"subscription", "android", "web version", "trial"}
+for key, required in [("banned_phrases", REQUIRED_BANNED), ("premium_only", REQUIRED_PREMIUM_ONLY), ("negated_only", REQUIRED_NEGATED_ONLY)]:
+    missing = required - {x.lower() for x in FACTS.get(key, [])}
+    check(not missing, f"facts.{key} dropped required entries {sorted(missing)}")
 
 # ---- 3. The one date --------------------------------------------------------
 
@@ -303,6 +345,9 @@ def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]
     """Each number in text with the problem its context finds, or None.
     ctx is {"label": row label, "col": column head} for a table cell."""
     toks = list(TOKEN.finditer(text))
+    ranges = [(m.group(1), f"range '{m.group(0)}' is not the multi check-in range {' to '.join(FACTS['multi_checkin_range'])}")
+              for m in re.finditer(r"(?<![\w.])(\d+) to (\d+)(?![\w.])", text)
+              if [m.group(1), m.group(2)] != FACTS["multi_checkin_range"]]
     free_ctx = bool(free_word.search(text)) or bool(ctx and ctx["col"] == "Free")
     nudge_ctx = bool(re.search(r"\bnudges?\b", text, re.I)) or bool(ctx and re.search(r"nudge", ctx["label"], re.I))
     habit_cell = bool(ctx and re.fullmatch(r"habits?", ctx["label"], re.I))
@@ -313,19 +358,39 @@ def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]
             continue
         num = s.lstrip("$")
         nxt = [x.group(0).lower() for x in toks[i + 1:i + 5]]
+        prv = [x.group(0).lower() for x in toks[max(0, i - 4):i]]
         if s.startswith("$"):
             if s != FACTS["price"]:
                 out.append((num, f"amount {s} is not facts.price {FACTS['price']}"))
             elif any(w in PERIOD_WORDS for w in nxt[:4]):
                 out.append((num, f"amount {s} is followed by a billing period"))
+            elif any(w in PERIOD_WORDS for w in prv):
+                out.append((num, f"amount {s} is preceded by a billing period"))
             else:
                 out.append((num, None))
         elif any(w in ("minute", "minutes") for w in nxt[:2]):
-            out.append((num, None if num in TIMER_MINUTES else f"'{num} minute' is not a timer value {sorted(TIMER_MINUTES, key=int)}"))
+            k = next(j for j, w in enumerate(nxt[:2]) if w in ("minute", "minutes"))
+            after = nxt[k + 1:k + 3]
+            if after[:1] == ["work"]:
+                want = {FACTS["pomodoro_work_minutes"]}
+            elif after[:1] == ["short"] and after[1:2] and after[1].startswith("break"):
+                want = {FACTS["pomodoro_short_break_minutes"]}
+            elif after[:1] == ["long"] and after[1:2] and after[1].startswith("break"):
+                want = {FACTS["pomodoro_long_break_minutes"]}
+            else:
+                want = TIMER_MINUTES
+            out.append((num, None if num in want else f"'{' '.join([num, 'minute', *after])}' is not {sorted(want, key=int)}"))
         elif any(w in ("achievement", "achievements", "badge", "badges") for w in nxt[:2]):
             out.append((num, None if num == FACTS["achievement_badges"] else f"'{num} badges' is not facts.achievement_badges {FACTS['achievement_badges']}"))
         elif any(w in ("nudge", "nudges") for w in nxt[:2]) or (nudge_ctx and nxt[:2] == ["a", "month"]):
-            out.append((num, None if num == FACTS["free_nudges_per_month"] else f"'{num}' nudges is not facts.free_nudges_per_month {FACTS['free_nudges_per_month']}"))
+            k = next((j for j, w in enumerate(nxt[:2]) if w in ("nudge", "nudges")), -1)
+            period = nxt[k + 1:k + 3]
+            if num != FACTS["free_nudges_per_month"]:
+                out.append((num, f"'{num}' nudges is not facts.free_nudges_per_month {FACTS['free_nudges_per_month']}"))
+            elif len(period) == 2 and period[0] in ("a", "per", "each", "every") and period[1] != "month":
+                out.append((num, f"'{num} nudges {' '.join(period)}': only 'a month' may follow the nudge count"))
+            else:
+                out.append((num, None))
         elif any(w in ("habit", "habits") for w in nxt[:2]) and (free_ctx or "limit" in nxt[:2]):
             out.append((num, None if num == FACTS["free_habit_limit"] else f"'{num} habits' about the free tier is not facts.free_habit_limit {FACTS['free_habit_limit']}"))
         elif habit_cell and free_ctx and text.strip() == s:
@@ -334,8 +399,13 @@ def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]
             out.append((num, None))
         else:
             out.append((num, f"number {num} is not bound to a fact and is not a milestone, the multi check-in range or a listed extra"))
-    return out
+    return ranges + out
 premium_phrases = [(p, whole(p)) for p in FACTS["premium_only"]]
+VIS_SUBJ = re.compile(r"\b(partner|partners|friend|friends|they|them|their|sister|someone|person|other)\b", re.I)
+VIS_VERB = re.compile(r"\b(see|sees|seen|watch|watches|told|show|shows|shown|notice|notices|follow|appear|appears|reach|reaches)\b", re.I)
+VIS_OBJ = re.compile(r"\b(completion|completions|complete|completed|streak|streaks|done today|widget|feed|progress|did|habit|habits)\b", re.I)
+VIS_OK = re.compile(r"\bPremium\b|weekly count|nudge", re.I)
+visibility_forms = {f.strip().lower(): 0 for f in FACTS.get("visibility_forms", [])}
 banned = [(p, whole_or_plural(p)) for p in FACTS["banned_phrases"]]
 negated = [(p, whole_or_plural(p)) for p in FACTS.get("negated_only", [])]
 negated_forms = [(f, whole(f)) for f in FACTS.get("negated_forms", [])]
@@ -399,7 +469,7 @@ for page, rel in HTML_PAGES:
             in_body = any(a.tag == "tbody" for a in node.ancestors())
             exempt = bool(competitor) and in_body and competitor in head and (col == 0 or (0 <= col < len(head) and head[col] == competitor))
             label = f"table cell (column {head[col]!r})" if 0 <= col < len(head) else "table cell"
-            parts = [(text, exempt, label)]
+            parts = [(norm(text), exempt, label)]
             cell_ctx = {"label": row_cells(tr)[0].text() if tr is not None else "", "col": head[col] if 0 <= col < len(head) else ""}
         elif node.tag == "h1":
             parts = [(s, False, "h1") for s in sentences(text)]
@@ -411,12 +481,12 @@ for page, rel in HTML_PAGES:
         if node is not footer_copy:
             number_units += [(*u, cell_ctx) for u in parts]
     for text, where in [(title, "title"), (description, "meta description")]:
-        units.append((text, bool(competitor), where))
-        number_units.append((text, bool(competitor), where, None))
+        units.append((norm(text), bool(competitor), where))
+        number_units.append((norm(text), bool(competitor), where, None))
     for key, value in [("og:title", meta(root, "property", "og:title")), ("og:description", meta(root, "property", "og:description")),
                        ("twitter:title", meta(root, "name", "twitter:title")), ("twitter:description", meta(root, "name", "twitter:description"))]:
         if value:
-            units.append((value, bool(competitor) and value in (title, description), key))
+            units.append((norm(value), bool(competitor) and value in (title, description), key))
     for n in root.walk():
         for attr in ("aria-label", "alt"):
             if n.attrs.get(attr):
@@ -430,7 +500,7 @@ for page, rel in HTML_PAGES:
                     if k in ("@type", "@id", "@context", "url", "item"):
                         continue
                     if page_node and k in ("name", "description"):
-                        yield v, bool(competitor), f"JSON-LD {obj.get('@type')} {k}"
+                        yield norm(v), bool(competitor), f"JSON-LD {obj.get('@type')} {k}"
                     else:
                         for s in sentences(v):
                             yield s, names_competitor(s), f"JSON-LD {k}"
@@ -460,6 +530,7 @@ for page, rel in HTML_PAGES:
     #    A sentence with the word "free" and a Premium-only feature fails
     #    unless it is, word for word, one of facts.premium_free_forms.
     def premium_free(sentence: str, where: str) -> None:
+        sentence = norm(sentence)
         if free_word.search(sentence) and any(rx.search(sentence) for _, rx in premium_phrases):
             key = re.sub(r"\s+", " ", sentence).strip().lower()
             if key in premium_free_forms:
@@ -516,6 +587,21 @@ for page, rel in HTML_PAGES:
                 if phrase.lower() in comp_phrases and exempt:
                     continue
                 failures.append(f"{rel}: '{phrase}' outside every facts.negated_forms entry, in {where}: {text!r}")
+
+    # m. A sentence where a partner sees, is shown or follows a completion,
+    #    streak, widget, feed or progress must carry the Premium condition, the
+    #    weekly count or a nudge, or be one of facts.visibility_forms.
+    for text, _exempt, where in units:
+        if where.startswith("JSON-LD") or where.startswith(("og:", "twitter:")):
+            continue
+        if VIS_SUBJ.search(text) and VIS_VERB.search(text) and VIS_OBJ.search(text):
+            if VIS_OK.search(text):
+                continue
+            key = text.strip().lower()
+            if key in visibility_forms:
+                visibility_forms[key] += 1
+                continue
+            failures.append(f"{rel}: partner visibility without a Premium condition, in {where}: {text!r}")
 
     # e. Links, store link, brand footer, contact email. Internal hrefs are
     #    resolved as a browser would; a path with an empty or dot segment fails
@@ -623,6 +709,10 @@ for form, count in negated_forms_used.items():
 for form, count in premium_free_forms.items():
     check(count > 0, f"facts.premium_free_forms has {form!r}, which no page uses (remove it)")
 
+# m. Every allowlisted visibility sentence is one the copy uses.
+for form, count in visibility_forms.items():
+    check(count > 0, f"facts.visibility_forms has {form!r}, which no page uses (remove it)")
+
 # l. Text colors in styles.css meet 4.5:1 in both themes.
 CSS = (ROOT / "styles.css").read_text(encoding="utf-8")
 
@@ -669,6 +759,9 @@ if dark_m and light_m:
     store, hover = css_rule(".store"), css_rule(".store:hover")
     for theme, env in themes.items():
         pairs = [(f"--{t} on --{b}", env[t], env[b]) for t in ("ink", "ink-2", "ink-3", "link") for b in ("bg", "bg-2")]
+        skip, skip_hover = css_rule(".skip"), css_rule(".skip:hover")
+        pairs += [("skip link", skip.get("color", ""), skip.get("background", "")),
+                  ("skip link hover", skip_hover.get("color", ""), skip_hover.get("background", ""))]
         pairs += [("store button", store.get("color", ""), store.get("background", "")),
                   ("store button hover", hover.get("color", ""), hover.get("background", ""))]
         worst = []
@@ -705,6 +798,7 @@ hygiene_files = {
     "scripts/build-pages.py": GEN_PATH.read_text(encoding="utf-8"),
     "scripts/verify-pages.py": pathlib.Path(__file__).read_text(encoding="utf-8"),
     "privacy-policy.html": (ROOT / "privacy-policy.html").read_text(encoding="utf-8"),
+    "support.html": (ROOT / "support.html").read_text(encoding="utf-8"),
 }
 hygiene_files.update(FRESH)
 for name, text in hygiene_files.items():
@@ -739,7 +833,21 @@ for s in strings(gen.CONFIG):
 #    dated site.lastmod.
 sitemap = FRESH["sitemap.xml"]
 locs = [htmlmod.unescape(u) for u in re.findall(r"<loc>([^<]*)</loc>", sitemap)]
-want_locs = [f"{BASE}/"] + [f"{BASE}/{p['slug']}/" for p in PAGES] + [f"{BASE}/{n}" for n in gen.POLICY_PAGES]
+EXPECTED_URLS = [
+    "https://vishutdhar.github.io/HabitFlame-Public/",
+    "https://vishutdhar.github.io/HabitFlame-Public/accountability-partner-habit-tracker/",
+    "https://vishutdhar.github.io/HabitFlame-Public/streak-tracker-app/",
+    "https://vishutdhar.github.io/HabitFlame-Public/pomodoro-habit-app/",
+    "https://vishutdhar.github.io/HabitFlame-Public/habit-app-for-couples/",
+    "https://vishutdhar.github.io/HabitFlame-Public/daily-habit-tracker-with-reminders/",
+    "https://vishutdhar.github.io/HabitFlame-Public/habitflame-vs-habitshare/",
+    "https://vishutdhar.github.io/HabitFlame-Public/support.html",
+    "https://vishutdhar.github.io/HabitFlame-Public/privacy-policy.html",
+    "https://vishutdhar.github.io/HabitFlame-Public/terms-of-service.html",
+]
+check(sorted(gen.sitemap_urls()) == sorted(EXPECTED_URLS), f"generator sitemap URLs differ from the pinned list: {sorted(set(gen.sitemap_urls()) ^ set(EXPECTED_URLS))}")
+check(gen.POLICY_PAGES == ["support.html", "privacy-policy.html", "terms-of-service.html"], f"generator POLICY_PAGES is {gen.POLICY_PAGES}")
+want_locs = EXPECTED_URLS
 check(len(locs) == len(set(locs)), f"sitemap.xml: duplicate URLs {sorted({u for u in locs if locs.count(u) > 1})}")
 check(set(locs) == set(want_locs), f"sitemap.xml: lists {sorted(set(locs) ^ set(want_locs))} unexpectedly or misses them")
 check(len(locs) == 1 + len(PAGES) + len(gen.POLICY_PAGES), f"sitemap.xml: {len(locs)} URLs")
@@ -760,6 +868,22 @@ for must in ("PostHog", "pairing service", "push notification", "Apple Health", 
 for stale in ("We do not collect any personal information", "do not use analytics", "do not have servers",
               "does not integrate with any third-party analytics"):
     check(stale.lower() not in POLICY.lower(), f"privacy-policy.html: still says {stale!r}")
+push = re.search(r"<h2>Push notifications</h2>(.*?)<h2>", POLICY, re.S)
+check(bool(push) and "have Premium and complete" in norm(re.sub(r"\s+", " ", push.group(1) if push else "")),
+      "privacy-policy.html: the Push notifications section does not say 'have Premium and complete'")
+
+# n. The support page (hand written) does not tie iCloud sync to Premium.
+SUPPORT = (ROOT / "support.html").read_text(encoding="utf-8")
+SUPPORT_TEXT = norm(htmlmod.unescape(re.sub(r"<[^>]+>", " ", SUPPORT)))
+for false_sentence in ("With Premium, iCloud sync keeps your habits synchronized across all your devices automatically.",
+                       "With Premium, iCloud sync keeps your habits in sync across all your iPhone and iPad devices."):
+    check(false_sentence not in SUPPORT_TEXT, f"support.html: still says {false_sentence!r}")
+for s in sentences(re.sub(r"\s+", " ", SUPPORT_TEXT)):
+    if re.search(r"\biCloud\b", s) and re.search(r"\bPremium\b", s):
+        failures.append(f"support.html: a sentence ties iCloud to Premium: {s!r}")
+support_emails = emails_in(SUPPORT)
+check(support_emails == {SITE["contact_email"]}, f"support.html: email addresses {sorted(support_emails)}")
+
 policy_emails = emails_in(POLICY)
 check(policy_emails == {SITE["contact_email"]}, f"privacy-policy.html: email addresses {sorted(policy_emails)}")
 

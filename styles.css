@@ -71,6 +71,7 @@ a:focus-visible, button:focus-visible {
   z-index: 200;
 }
 .skip:focus { transform: translateY(0); }
+.skip:hover { background: var(--ember-deep); color: #fff; }
 
 /* Header */
 .top {

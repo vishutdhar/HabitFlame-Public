@@ -30,7 +30,9 @@
       "real-time partner updates",
       "instant partner notifications",
       "unlimited partner nudges",
-      "unlimited nudges"
+      "unlimited nudges",
+      "stack habits",
+      "stacking"
     ],
     "premium_free_forms": [
       "HabitFlame is free for up to 5 habits with the partner, streaks, widgets, reminders and the focus timer included, and Premium is a one-time purchase of $9.99 that adds unlimited habits, habit stacking, smart insights, real-time partner updates and unlimited partner nudges."
@@ -49,7 +51,16 @@
       "no analytics", "no tracking", "no servers", "never leaves your device", "not accessible by"
     ],
     "negated_only": ["subscription", "android", "web version", "trial"],
-    "negated_forms": ["not a subscription", "no subscription", "there is no android or web version"]
+    "negated_forms": ["not a subscription", "no subscription", "there is no android or web version"],
+    "visibility_forms": [
+      "A streak someone else can see",
+      "React to a completion that reaches them, which shows up in your activity feed.",
+      "A home screen widget shows how your partner's day is going next to your own.",
+      "Your friend can see whether you did the habit.",
+      "In HabitShare you add friends, pick which habits each friend can see, and they follow your progress.",
+      "You can pair with several people and choose which habits each of them can follow.",
+      "Both apps start from the same idea: a habit is easier to keep when a friend can see it."
+    ]
   },
   "landing": {
     "title": "HabitFlame: habit tracker with an accountability partner",
@@ -109,9 +120,9 @@
         {"h2": "Real-time updates"},
         {"p": "With Premium, real-time partner updates send your partner an instant notification the moment you complete a shared habit, plus a milestone alert when a streak milestone is crossed and one evening alert when a streak of 3 or more days is at risk. Your partner does not need Premium to receive them, and their feed, partner widget and streak view for you fill in from them. Without Premium on your side, your partner is not told about individual completions; they see the combined weekly count for the two of you, and your nudges."},
         {"h2": "The partner widget"},
-        {"p": "A home screen widget shows how your partner's day is going next to your own. It fills in from the updates a Premium partner sends, so it works best when the person you are watching has Premium."},
+        {"p": "A home screen widget shows how your partner's day is going next to your own. It fills in from the updates a Premium partner sends, so it only fills in when the person you are watching has Premium."},
         {"h2": "What stays private"},
-        {"p": "HabitFlame does not require an account. Your habits are stored on your device and in your own iCloud. With Premium, the habits you complete and share are delivered to your partner through HabitFlame's pairing service and Apple push notifications; otherwise the service receives only a weekly count. Details are in the [privacy policy](privacy-policy.html). Pairing shares only the habits you pick, and only when you have Premium are individual completions sent; the pairing service otherwise receives a weekly count. There is no location sharing, no message history and nothing your partner can see beyond what you chose to share."},
+        {"p": "HabitFlame does not require an account. Your habits are stored on your device and in your own iCloud. With Premium, the habits you complete and share are delivered to your partner through HabitFlame's pairing service and Apple push notifications; otherwise the service receives only a weekly count. Details are in the [privacy policy](privacy-policy.html). Pairing shares only the habits you pick. There is no location sharing, no message history and nothing your partner can see beyond what you chose to share."},
         {"h2": "Everything else in the tracker"},
         {"p": "The partner feature sits on top of a full habit tracker. You can log a habit as yes or no, as a count such as glasses of water, as a duration such as minutes of reading, or as a multi check-in for something you do 2 to 4 times a day. Each habit runs every day, on specific days of the week or against a weekly target. Streaks, milestone celebrations, 16 achievement badges, home and lock screen widgets, a Pomodoro focus timer, stats with a full year view, and reminders that change their wording are all included."},
         {"h2": "Choosing the right partner"},
@@ -244,11 +255,11 @@
       "title": "Habit app for couples and partners",
       "description": "A habit app two people can use together. Pair with your partner in HabitFlame, share the habits you choose, react to each other's wins and nudge each other.",
       "h1": "A habit app for couples who want to keep each other honest",
-      "deck": "Building a habit next to someone you live with is easier when the app knows about both of you. HabitFlame pairs two people, shows each what the other completed and keeps everything else separate.",
+      "deck": "Building a habit next to someone you live with is easier when the app knows about both of you. HabitFlame pairs two people and, with Premium, shows each what the other completed, while keeping everything else separate.",
       "faq_heading": "Questions about using HabitFlame as a couple",
       "blocks": [
         {"h2": "Two trackers, one connection"},
-        {"p": "HabitFlame does not merge your habits into a shared list. You each keep your own tracker, your own streaks and your own reminders. Pairing adds a window between the two: the habits you choose to share show up on your partner's phone, and theirs show up on yours."},
+        {"p": "HabitFlame does not merge your habits into a shared list. You each keep your own tracker, your own streaks and your own reminders. Pairing adds a window between the two: with Premium on your side, the habits you complete show up on your partner's phone as they happen, and with Premium on theirs, theirs show up on yours. With both of you on the free version, the window shows a combined weekly count."},
         {"p": "That design fits how couples actually build habits. One of you wants to run three times a week, the other wants to read before bed. Neither habit belongs to both of you, but you both want to know the other is keeping at it."},
         {"h2": "Setting it up"},
         {"p": "One person adds a partner from the Partners tab and sends the invite link. The other opens it in HabitFlame and the two phones are paired. If your partner does not have the app yet, the link sends them to the App Store first. No account is created and no password is shared."},
