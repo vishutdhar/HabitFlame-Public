@@ -343,17 +343,19 @@ def visible_units(root: Node) -> list[tuple[str, Node, "Node | None"]]:
 premium_word = whole("Premium")
 free_word = whole("free")
 TIMER_MINUTES = {FACTS["pomodoro_work_minutes"], FACTS["pomodoro_short_break_minutes"], FACTS["pomodoro_long_break_minutes"]}
-# A number no binding claims must be a streak milestone, part of the multi
-# check-in range or a listed extra.
-UNBOUND_OK = set(FACTS["streak_milestones"]) | set(FACTS["multi_checkin_range"]) | EXTRA_ALLOWED_NUMBERS
 PERIOD_WORDS = {"month", "monthly", "year", "yearly", "annual", "week"}
 TOKEN = re.compile(r"\$?\d+(?:\.\d+)?|[A-Za-z']+")
 premium_free_forms = {f.lower(): 0 for f in FACTS.get("premium_free_forms", [])}
 
 
-def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]]:
+MONTHS = {"january", "february", "march", "april", "may", "june", "july", "august",
+          "september", "october", "november", "december"}
+
+
+def bind_numbers(text: str, ctx: "dict | None", dated_ok: bool = False) -> list[tuple[str, "str | None"]]:
     """Each number in text with the problem its context finds, or None.
-    ctx is {"label": row label, "col": column head} for a table cell."""
+    ctx is {"label": row label, "col": column head} for a table cell.
+    dated_ok allows a year right after a month name (the comparison page)."""
     toks = list(TOKEN.finditer(text))
     ranges = [(m.group(1), f"range '{m.group(0)}' is not the multi check-in range {' to '.join(FACTS['multi_checkin_range'])}")
               for m in re.finditer(r"(?<![\w.])(\d+) to (\d+)(?![\w.])", text)
@@ -361,6 +363,9 @@ def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]
     free_ctx = bool(free_word.search(text)) or bool(ctx and ctx["col"] == "Free")
     nudge_ctx = bool(re.search(r"\bnudges?\b", text, re.I)) or bool(ctx and re.search(r"nudge", ctx["label"], re.I))
     habit_cell = bool(ctx and re.fullmatch(r"habits?", ctx["label"], re.I))
+    range_spans = [(m.start(), m.end()) for m in re.finditer(r"(?<![\w.])(\d+) to (\d+)(?![\w.])", text)
+                   if [m.group(1), m.group(2)] == FACTS["multi_checkin_range"]]
+    milestone_ctx = bool(re.search(r"\b(milestones?|days)\b", text, re.I))
     out = []
     for i, m in enumerate(toks):
         s = m.group(0)
@@ -392,7 +397,8 @@ def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]
             out.append((num, None if num in want else f"'{' '.join([num, 'minute', *after])}' is not {sorted(want, key=int)}"))
         elif any(w in ("achievement", "achievements", "badge", "badges") for w in nxt[:2]):
             out.append((num, None if num == FACTS["achievement_badges"] else f"'{num} badges' is not facts.achievement_badges {FACTS['achievement_badges']}"))
-        elif any(w in ("nudge", "nudges") for w in nxt[:2]) or (nudge_ctx and nxt[:2] == ["a", "month"]):
+        elif (any(w in ("nudge", "nudges") for w in nxt[:2]) or any(w in ("nudge", "nudges") for w in prv[-2:])
+              or (nudge_ctx and nxt[:2] == ["a", "month"])):
             k = next((j for j, w in enumerate(nxt[:2]) if w in ("nudge", "nudges")), -1)
             period = nxt[k + 1:k + 3]
             if num != FACTS["free_nudges_per_month"]:
@@ -405,10 +411,16 @@ def bind_numbers(text: str, ctx: "dict | None") -> list[tuple[str, "str | None"]
             out.append((num, None if num == FACTS["free_habit_limit"] else f"'{num} habits' about the free tier is not facts.free_habit_limit {FACTS['free_habit_limit']}"))
         elif habit_cell and free_ctx and text.strip() == s:
             out.append((num, None if num == FACTS["free_habit_limit"] else f"Habits under Free is {num}, not facts.free_habit_limit {FACTS['free_habit_limit']}"))
-        elif num in UNBOUND_OK:
+        elif num in FACTS["streak_milestones"] and milestone_ctx:
+            out.append((num, None))
+        elif num in FACTS["multi_checkin_range"] and any(a <= m.start() < b for a, b in range_spans):
+            out.append((num, None))
+        elif num == "3" and nxt[:2] == ["or", "more"]:
+            out.append((num, None))
+        elif num == "2026" and dated_ok and prv[-1:] and prv[-1] in MONTHS:
             out.append((num, None))
         else:
-            out.append((num, f"number {num} is not bound to a fact and is not a milestone, the multi check-in range or a listed extra"))
+            out.append((num, f"number {num} is outside every allowed context (a bound fact, a milestone with 'milestone' or 'days', '2 to 4', '3 or more', a dated year on the comparison page)"))
     return ranges + out
 premium_phrases = [(p, whole(p)) for p in FACTS["premium_only"]]
 VIS_SUBJ = re.compile(r"\b(partner|partners|friend|friends|they|them|their|sister|someone|person|other)\b", re.I)
@@ -532,7 +544,7 @@ for page, rel in HTML_PAGES:
                 continue
             extra = " (a competitor number outside the places the competitor rule allows)" if num in comp_numbers else ""
             failures.append(f"{rel}: number {num} is not in facts.allowed_numbers{extra}, in {where}: {text!r}")
-        for num, problem in bind_numbers(text, ctx):
+        for num, problem in bind_numbers(text, ctx, dated_ok=bool(competitor)):
             if problem and not (num in comp_numbers and exempt):
                 failures.append(f"{rel}: {problem}, in {where}: {text!r}")
     if footer_copy is not None:
@@ -880,29 +892,73 @@ for u, d in pairs:
     check(iso_date(d), f"sitemap.xml: lastmod {d!r} for {u} is not a YYYY-MM-DD date")
     check(d == url_date.get(u), f"sitemap.xml: lastmod for {u} is {d}, configured {url_date.get(u)}")
 
-# i2. A policy page identical to origin/main keeps a date no later than its
-#     last change on origin/main; a page changed on this branch is dated no
-#     earlier than that change. Read only: git show and git log.
+# i2. Dates against the baseline, the first of origin/main, main or the
+#     merge-base with HEAD's upstream that resolves. Read only git calls.
+#     Without a baseline these checks are skipped, never failed.
+#     a. lastmod must advance: a page whose content differs from the baseline
+#        is dated strictly later than the baseline's configured date for it;
+#        an identical page keeps the baseline's date.
+#     b. Commit-date bound for policy pages: identical to the baseline means
+#        dated no later than its last change there; changed means no earlier.
 def git(*args: str) -> "bytes | None":
-    r = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True)
+    try:
+        r = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True)
+    except OSError:
+        return None
     return r.stdout if r.returncode == 0 else None
 
 
-if git("rev-parse", "--verify", "-q", "origin/main") is None:
-    failures.append("git: cannot read origin/main, so policy page dates cannot be checked (run git fetch)")
+def baseline_ref() -> "str | None":
+    for ref in ("origin/main", "main"):
+        if git("rev-parse", "--verify", "-q", ref + "^{commit}") is not None:
+            return ref
+    upstream = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if upstream:
+        base = git("merge-base", "HEAD", upstream.decode().strip())
+        if base:
+            return base.decode().strip()
+    return None
+
+
+BASELINE = baseline_ref()
+skip_lines: list[str] = []
+if BASELINE is None:
+    skip_lines.append("policy-date history check skipped: no baseline ref")
 else:
-    for name in POLICY_NAMES:
-        on_main = git("show", f"origin/main:{name}")
-        main_date = (git("log", "-1", "--format=%ad", "--date=short", "origin/main", "--", name) or b"").decode().strip()
-        here = (ROOT / name).read_bytes()
-        conf = DATES.get(name)
-        if on_main is None or not main_date or not iso_date(conf):
-            failures.append(f"git: cannot compare {name} with origin/main")
-            continue
-        if here == on_main:
-            check(conf <= main_date, f"{name}: unchanged from origin/main (last changed {main_date}) but dated {conf}")
+    base_raw = git("show", f"{BASELINE}:scripts/pages.json")
+    try:
+        base_cfg = json.loads(base_raw) if base_raw else None
+    except ValueError:
+        base_cfg = None
+    base_dates: dict[str, str] = {}
+    if base_cfg:
+        fallback = base_cfg.get("site", {}).get("lastmod")
+        base_dates["index.html"] = base_cfg.get("landing", {}).get("lastmod") or fallback
+        for bp in base_cfg.get("pages", []):
+            base_dates[f"{bp['slug']}/index.html"] = bp.get("lastmod") or fallback
+        for name in POLICY_NAMES:
+            base_dates[name] = (base_cfg.get("site", {}).get("policy_lastmod") or {}).get(name) or fallback
+    targets = [("index.html", DATES["landing"], FRESH["index.html"].encode("utf-8"))]
+    targets += [(f"{p['slug']}/index.html", DATES[p["slug"]], FRESH[f"{p['slug']}/index.html"].encode("utf-8")) for p in PAGES]
+    targets += [(name, DATES[name], (ROOT / name).read_bytes()) for name in POLICY_NAMES]
+    for rel_path, conf, here in targets:
+        before = base_dates.get(rel_path)
+        if not before or not iso_date(conf):
+            continue  # new to the baseline's config: every configured date is new
+        if here == git("show", f"{BASELINE}:{rel_path}"):
+            check(conf == before, f"{rel_path}: unchanged from {BASELINE} but lastmod moved from {before} to {conf}")
         else:
-            check(conf >= main_date, f"{name}: changed on this branch but dated {conf}, before its origin/main change on {main_date}")
+            check(conf > before, f"{rel_path}: changed from {BASELINE} but lastmod {conf} is not later than {before}")
+    for name in POLICY_NAMES:
+        on_base = git("show", f"{BASELINE}:{name}")
+        base_date = (git("log", "-1", "--format=%ad", "--date=short", BASELINE, "--", name) or b"").decode().strip()
+        conf = DATES.get(name)
+        if on_base is None or not base_date or not iso_date(conf):
+            continue  # not on the baseline yet
+        if (ROOT / name).read_bytes() == on_base:
+            check(conf <= base_date, f"{name}: unchanged from {BASELINE} (last changed {base_date}) but dated {conf}")
+        else:
+            check(conf >= base_date, f"{name}: changed from {BASELINE} but dated {conf}, before its change there on {base_date}")
 for u in locs:
     rel = u[len(BASE) + 1:] if u.startswith(BASE + "/") else None
     if rel is None:
@@ -953,6 +1009,8 @@ for line in contrast_lines:
     print(line)
 for name, n in word_counts:
     print(f"words  {n:5d}  {name}")
+for line in skip_lines:
+    print(line)
 for note in notes:
     print(f"note   {note}")
 if failures:

@@ -317,3 +317,11 @@ section h2 {
   .flame { height: 1.7rem; }
   .compare { display: block; overflow-x: auto; }
 }
+
+@media (max-width: 360px) {
+  .ledger { padding: 0.9rem; }
+  .ledger-row { grid-template-columns: 2.6rem repeat(7, 1fr); gap: 0.2rem; }
+  .ledger-row.days { font-size: 0.7rem; }
+  .flame { height: 1.5rem; }
+  .store { font-size: 0.95rem; padding: 0.8rem 1.1rem; }
+}
