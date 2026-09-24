@@ -225,6 +225,7 @@ REQUIRED_BANNED = {
     "shared streak", "joint streak", "couple streak", "team streak",
     "chat", "messaging", "video call", "leaderboard", "challenge",
     "no analytics", "no tracking", "no servers", "never leaves your device", "not accessible by",
+    "receives only a weekly count",
 }
 REQUIRED_PREMIUM_ONLY = {
     "unlimited habits", "habit stacking", "smart insights", "real-time partner updates",

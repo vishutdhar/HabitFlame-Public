@@ -48,7 +48,8 @@
       "unlimited free", "free forever", "lifetime free",
       "shared streak", "joint streak", "couple streak", "team streak",
       "chat", "messaging", "video call", "leaderboard", "challenge",
-      "no analytics", "no tracking", "no servers", "never leaves your device", "not accessible by"
+      "no analytics", "no tracking", "no servers", "never leaves your device", "not accessible by",
+      "receives only a weekly count"
     ],
     "negated_only": ["subscription", "android", "web version", "trial"],
     "negated_forms": ["not a subscription", "no subscription", "there is no android or web version"],
@@ -90,7 +91,7 @@
     "guides_intro": "Longer answers to the questions people ask before choosing a habit app.",
     "faq": [
       {"q": "Is HabitFlame free?", "a": "Yes. The free version tracks up to 5 habits with every tracking type, streaks, badges, widgets, reminders, the focus timer, iCloud sync, Apple Health and an accountability partner with 3 nudges a month. Premium is a one-time purchase of $9.99 that removes the habit limit and adds habit stacking, smart insights, real-time partner updates and unlimited nudges."},
-      {"q": "Do I need an account?", "a": "No. HabitFlame works the moment you open it. Your habits are stored on your device and in your own iCloud. With Premium, the habits you complete and share are delivered to your partner through HabitFlame's pairing service and Apple push notifications; otherwise the service receives only a weekly count. Details are in the [privacy policy](privacy-policy.html). Pairing with a partner uses an invite link, not a username or password."},
+      {"q": "Do I need an account?", "a": "No. HabitFlame works the moment you open it. Your habits are stored on your device and in your own iCloud. With Premium, the shared habits you complete are delivered to your partner through HabitFlame's pairing service and Apple push notifications. Without Premium, the service carries your nudges, reactions and a weekly count of your completions, never individual habits. What pairing itself stores is set out in the [privacy policy](privacy-policy.html). Pairing with a partner uses an invite link, not a username or password."},
       {"q": "Which devices does it run on?", "a": "HabitFlame is an iPhone and iPad app from the App Store. There is no Android or web version."},
       {"q": "Does my partner need to pay?", "a": "No. Pairing, reactions and nudges are free for both of you. Real-time partner updates are bought by the person whose completions are sent: if you have Premium, your partner gets each of your shared completions instantly without paying. With both of you on the free version, you see a combined weekly count of what you completed and can nudge each other."}
     ]
@@ -124,7 +125,7 @@
         {"h2": "The partner widget"},
         {"p": "A home screen widget shows how your partner's day is going next to your own. It fills in from the updates a Premium partner sends, so it only fills in when the person you are watching has Premium."},
         {"h2": "What stays private"},
-        {"p": "HabitFlame does not require an account. Your habits are stored on your device and in your own iCloud. With Premium, the habits you complete and share are delivered to your partner through HabitFlame's pairing service and Apple push notifications; otherwise the service receives only a weekly count. Details are in the [privacy policy](privacy-policy.html). Pairing shares only the habits you pick. There is no location sharing, no message history and nothing your partner can see beyond what you chose to share."},
+        {"p": "HabitFlame does not require an account. Your habits are stored on your device and in your own iCloud. With Premium, the shared habits you complete are delivered to your partner through HabitFlame's pairing service and Apple push notifications. Without Premium, the service carries your nudges, reactions and a weekly count of your completions, never individual habits. What pairing itself stores is set out in the [privacy policy](privacy-policy.html). Pairing shares only the habits you pick. There is no location sharing, no message history and nothing your partner can see beyond what you chose to share."},
         {"h2": "Everything else in the tracker"},
         {"p": "The partner feature sits on top of a full habit tracker. You can log a habit as yes or no, as a count such as glasses of water, as a duration such as minutes of reading, or as a multi check-in for something you do 2 to 4 times a day. Each habit runs every day, on specific days of the week or against a weekly target. Streaks, milestone celebrations, 16 achievement badges, home and lock screen widgets, a Pomodoro focus timer, stats with a full year view, and reminders that change their wording are all included."},
         {"h2": "Choosing the right partner"},
@@ -287,7 +288,7 @@
           "A health habit with a count, such as glasses of water or medication taken morning and evening as a multi check-in."
         ]},
         {"h2": "Privacy inside the pair"},
-        {"p": "Pairing shares only what you choose: which shared habits are done, your streak on them and the reactions and nudges between you. There is no location, no message thread and no access to habits you kept private. Your habits are stored on your device and in your own iCloud. With Premium, the habits you complete and share are delivered to your partner through HabitFlame's pairing service and Apple push notifications; otherwise the service receives only a weekly count. Details are in the [privacy policy](privacy-policy.html). Either of you can remove the partner at any time."},
+        {"p": "Pairing shares only what you choose: which shared habits are done, your streak on them and the reactions and nudges between you. There is no location, no message thread and no access to habits you kept private. Your habits are stored on your device and in your own iCloud. With Premium, the shared habits you complete are delivered to your partner through HabitFlame's pairing service and Apple push notifications. Without Premium, the service carries your nudges, reactions and a weekly count of your completions, never individual habits. What pairing itself stores is set out in the [privacy policy](privacy-policy.html). Either of you can remove the partner at any time."},
         {"h2": "The tracker underneath"},
         {"p": "Every habit can be yes or no, a count, a duration or a multi check-in for something you do 2 to 4 times a day, scheduled every day, on specific days or as a weekly target. Streaks with milestone celebrations, 16 achievement badges, home and lock screen widgets including a partner widget, reminders with changing wording, a Pomodoro focus timer and a stats tab with a full year view are all part of the app."},
         {"h2": "Keeping it supportive"},
