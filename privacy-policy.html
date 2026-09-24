@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Policy - HabitFlame</title>
+    <title>Privacy Policy | HabitFlame</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -20,49 +20,70 @@
 </head>
 <body>
     <h1>Privacy Policy</h1>
-    <p class="last-updated">Last updated: July 19, 2026</p>
+    <p class="last-updated">Last updated: September 24, 2026</p>
 
     <h2>Introduction</h2>
-    <p>HabitFlame ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we handle your information when you use our iOS application.</p>
+    <p>HabitFlame ("we", "our" or "us") is a habit tracker for iPhone and iPad. This policy explains what the app stores, what it sends, who receives it and how you can remove it. HabitFlame does not ask you to create an account.</p>
 
-    <h2>Information We Collect</h2>
-    <p><strong>We do not collect any personal information.</strong> HabitFlame is designed with privacy in mind:</p>
+    <h2>What is stored on your device and in iCloud</h2>
+    <p>Your habits, their entries and streaks, your achievements, your settings and your partner records are stored on your device. The app also syncs them automatically to your private iCloud database. There is no sync switch inside the app. iCloud is controlled in the iOS Settings app. We cannot read your private iCloud database.</p>
+    <p>The optional "Email or Phone" field on a partner card is stored only on your device and in your private iCloud. It is not sent anywhere else. If you choose someone to invite from your contacts, the app uses the system contact picker and keeps only the name you chose, on your device, to label the invite.</p>
+
+    <h2>Accountability partners and the pairing service</h2>
+    <p>Pairing with a partner uses an invite link and HabitFlame's pairing service, a backend we operate for the app on Supabase.</p>
+    <p>When you create an invite, the pairing service stores your display name, your device's push token, a random invite identifier and a random user identifier. An invite expires after 7 days, and its record is removed 30 days after it expires.</p>
+    <p>While you are paired, the pairing service stores each device's push token, random device identifiers, hashed secrets and timestamps.</p>
+    <p>Only the habits you choose to share are sent to your partner. Habits you do not share are never sent to a partner.</p>
+    <p>When you remove a partner, the records for your current pairing are deleted. Some records from older pairings are marked as revoked instead of deleted.</p>
+
+    <h2>Push notifications</h2>
+    <p>When you complete a shared habit, the app sends your partner a push notification through the pairing service and Apple's push notification service. The message carries the habit name, your streak count, your display name and the identifiers needed to deliver it. Only your paired partner's device receives it. The pairing service does not keep these messages after delivery.</p>
+
+    <h2>Analytics and diagnostics</h2>
+    <p>The app uses PostHog, an analytics service with servers in the United States, to understand how the app is used. The app sends PostHog:</p>
     <ul>
-        <li>All your habit data is stored locally on your device</li>
-        <li>We do not have servers that collect or store your data</li>
-        <li>We do not use analytics or tracking services</li>
-        <li>We do not collect usage statistics</li>
+        <li>usage events, for example a habit completed or a screen opened</li>
+        <li>the app version and build type</li>
+        <li>your device model and type, iOS version, screen size, language and timezone</li>
+        <li>your network type, wifi or cellular</li>
+        <li>a random identifier for your installation of the app</li>
+        <li>your IP address, which PostHog uses to estimate your approximate location</li>
+        <li>crash and hang diagnostics, such as durations and technical fingerprints</li>
+    </ul>
+    <p>Habit names, partner names, display names, email addresses and phone numbers are removed from event details before they are sent. There is currently no switch in the app to turn analytics off.</p>
+
+    <h2>Screen recordings</h2>
+    <p>Session replay is turned on. PostHog can record your sessions in the app as a series of screen images. Text fields are masked, but other text on the screen, including your habit names, can appear in these recordings. Recordings are kept for 30 days.</p>
+
+    <h2>Apple Health</h2>
+    <p>If you give permission, the app reads step count, active energy, exercise minutes, water intake, body mass, mindful minutes and workouts from Apple Health, so it can complete habits for you automatically. It does not write anything to Apple Health. Health values stay on your device. They are never sent to partners, to the pairing service or to analytics. Analytics receives only the type of a habit.</p>
+
+    <h2>Purchases</h2>
+    <p>Purchases are handled by Apple through the App Store. No receipt or payment details are sent anywhere other than Apple. Analytics receives the product identifier and price tier of a purchase.</p>
+
+    <h2>Reminders</h2>
+    <p>Habit reminders are local notifications scheduled on your device.</p>
+
+    <h2>What we do not do</h2>
+    <ul>
+        <li>We do not show advertising or use ad networks.</li>
+        <li>We do not sell your data.</li>
+        <li>We do not share your data with data brokers.</li>
     </ul>
 
-    <h2>iCloud Sync</h2>
-    <p>If you enable iCloud sync (optional feature), your habit data will be stored in your personal iCloud account. This data is:</p>
-    <ul>
-        <li>Encrypted and protected by Apple</li>
-        <li>Only accessible by you through your Apple ID</li>
-        <li>Not accessible by HabitFlame developers</li>
-    </ul>
+    <h2>Data retention and deletion</h2>
+    <p>Deleting the app removes the data stored on your device. It does not remove the copy in your private iCloud, which you can delete through your iCloud settings. It also does not remove the pairing records described above, so remove your partner in the app before you delete it. For any other deletion request, email us at the address below.</p>
 
-    <h2>Data Storage</h2>
-    <p>Your habit data, including habit names, completion history, and streaks, is stored:</p>
-    <ul>
-        <li>Locally on your device using Apple's secure storage</li>
-        <li>Optionally in your personal iCloud account (if enabled)</li>
-    </ul>
+    <h2>Children</h2>
+    <p>HabitFlame has no age check and is not directed at children under 13. If a child has used the app and you want their data removed, contact us.</p>
 
-    <h2>Third-Party Services</h2>
-    <p>HabitFlame does not integrate with any third-party analytics, advertising, or tracking services.</p>
+    <h2>Changes</h2>
+    <p>We may update this policy. When we do, we will post the new version on this page and change the "Last updated" date.</p>
 
-    <h2>Children's Privacy</h2>
-    <p>HabitFlame does not knowingly collect any information from children. The app is suitable for all ages as it does not collect personal information.</p>
-
-    <h2>Changes to This Policy</h2>
-    <p>We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date.</p>
-
-    <h2>Contact Us</h2>
-    <p>If you have any questions about this Privacy Policy, please contact us at:</p>
-    <p>Email: <a href="mailto:support@freedom-terminal.com">support@freedom-terminal.com</a></p>
+    <h2>Contact</h2>
+    <p>If you have questions about this policy or want data removed, email <a href="mailto:support@freedom-terminal.com">support@freedom-terminal.com</a>.</p>
 
     <hr style="margin-top: 40px;">
-    <p style="color: #666; font-size: 0.85em;">HabitFlame - Build Streaks. Stay Consistent.</p>
+    <p style="color: #666; font-size: 0.85em;">HabitFlame. Build streaks. Stay consistent.</p>
 </body>
 </html>

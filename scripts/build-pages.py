@@ -13,13 +13,12 @@ Outputs (all at the repo root):
   <site.verification_file>   the Google Search Console ownership file
 
 Rendering is deterministic: the same pages.json and template give the same
-bytes. The only date is the sitemap lastmod, taken from the SITE_BUILD_DATE
-environment variable (YYYY-MM-DD) when it is set, else today.
+bytes. The only date is the sitemap lastmod, which is site.lastmod in
+pages.json, so a rebuild on another day changes nothing.
 """
 import datetime
 import html
 import json
-import os
 import pathlib
 import re
 
@@ -55,12 +54,26 @@ def esc(text: str) -> str:
     return html.escape(text, quote=True)
 
 
-def build_date() -> str:
-    value = os.environ.get("SITE_BUILD_DATE", "").strip()
-    if value:
-        datetime.date.fromisoformat(value)  # reject a malformed date loudly
-        return value
-    return datetime.date.today().isoformat()
+# Inline link form for copy in pages.json: [link text](path), where path is a
+# file or directory on this site, relative to base_url. Everything else in the
+# string is escaped; structured data gets the link text only.
+LINK = re.compile(r"\[([^\[\]]+)\]\(([a-z0-9][a-z0-9./-]*(?:#[a-z0-9-]+)?)\)")
+
+
+def rich(text: str) -> str:
+    """Escaped HTML with the inline link form turned into site links."""
+    out, pos = [], 0
+    for m in LINK.finditer(text):
+        out.append(esc(text[pos:m.start()]))
+        out.append(f'<a href="{esc(BASE + "/" + m.group(2))}">{esc(m.group(1))}</a>')
+        pos = m.end()
+    out.append(esc(text[pos:]))
+    return "".join(out)
+
+
+def plain(text: str) -> str:
+    """The text a reader sees: the inline link form reduced to its link text."""
+    return LINK.sub(r"\1", text)
 
 
 def page_url(page: dict | None) -> str:
@@ -97,7 +110,7 @@ def guides_list(pages: list[dict]) -> str:
 
 
 def faq_list(entries: list[dict]) -> str:
-    rows = "\n".join(f"<dt>{esc(e['q'])}</dt>\n<dd>{esc(e['a'])}</dd>" for e in entries)
+    rows = "\n".join(f"<dt>{esc(e['q'])}</dt>\n<dd>{rich(e['a'])}</dd>" for e in entries)
     return f"<dl>\n{rows}\n</dl>"
 
 
@@ -134,7 +147,7 @@ def landing_main() -> str:
     ]
     for section in LANDING["sections"]:
         items = "\n".join(
-            f"<li><h3>{esc(title)}</h3>\n<p>{esc(body)}</p></li>" for title, body in section["items"]
+            f"<li><h3>{esc(title)}</h3>\n<p>{rich(body)}</p></li>" for title, body in section["items"]
         )
         parts.append(f"<section>\n<h2>{esc(section['heading'])}</h2>\n<ul class=\"rows\">\n{items}\n</ul>\n</section>")
     premium = LANDING["premium"]
@@ -165,9 +178,9 @@ def render_block(block: dict, page: dict) -> str:
     if kind == "h2":
         return f"<h2>{esc(value)}</h2>"
     if kind == "p":
-        return f"<p>{esc(value)}</p>"
+        return f"<p>{rich(value)}</p>"
     if kind == "ul":
-        return "<ul>\n" + "\n".join(f"<li>{esc(item)}</li>" for item in value) + "\n</ul>"
+        return "<ul>\n" + "\n".join(f"<li>{rich(item)}</li>" for item in value) + "\n</ul>"
     if kind == "table":
         head = "".join(f'<th scope="col">{esc(c)}</th>' for c in value["head"])
         body = "\n".join(
@@ -188,7 +201,7 @@ def article_main(page: dict) -> str:
     blocks = "\n".join(render_block(b, page) for b in page["blocks"])
     others = [p for p in PAGES if p["slug"] != page["slug"]]
     return (
-        '<div class="article">\n'
+        '<div class="guide">\n'
         '<header class="article-head">\n'
         f"<h1>{esc(page['h1'])}</h1>\n"
         f'<p class="deck">{esc(page["deck"])}</p>\n'
@@ -248,7 +261,7 @@ def jsonld(page: dict | None) -> str:
             "@type": "FAQPage",
             "mainEntity": [
                 {"@type": "Question", "name": e["q"],
-                 "acceptedAnswer": {"@type": "Answer", "text": e["a"]}}
+                 "acceptedAnswer": {"@type": "Answer", "text": plain(e["a"])}}
                 for e in faq
             ],
         })
@@ -295,7 +308,9 @@ def sitemap_urls() -> list[str]:
     return [f"{BASE}/"] + [page_url(p) for p in PAGES] + [f"{BASE}/{name}" for name in POLICY_PAGES]
 
 
-def render_sitemap(date: str) -> str:
+def render_sitemap() -> str:
+    date = SITE["lastmod"]
+    datetime.date.fromisoformat(date)  # reject a malformed date loudly
     entries = "\n".join(f"  <url>\n    <loc>{esc(u)}</loc>\n    <lastmod>{date}</lastmod>\n  </url>"
                         for u in sitemap_urls())
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -311,12 +326,12 @@ def render_verification() -> str:
     return f"google-site-verification: {SITE['verification_file']}\n"
 
 
-def outputs(date: str) -> dict[str, str]:
+def outputs() -> dict[str, str]:
     """Every generated file, keyed by its path relative to the repo root."""
     files = {"index.html": render(None)}
     for page in PAGES:
         files[f"{page['slug']}/index.html"] = render(page)
-    files["sitemap.xml"] = render_sitemap(date)
+    files["sitemap.xml"] = render_sitemap()
     files["robots.txt"] = render_robots()
     files[SITE["verification_file"]] = render_verification()
     return files
@@ -326,7 +341,7 @@ def main() -> None:
     slugs = [p["slug"] for p in PAGES]
     if len(set(slugs)) != len(slugs) or any(not re.fullmatch(r"[a-z0-9-]+", s) for s in slugs):
         raise SystemExit(f"slugs must be unique lowercase words joined by hyphens: {slugs}")
-    for rel, text in outputs(build_date()).items():
+    for rel, text in outputs().items():
         path = ROOT / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")

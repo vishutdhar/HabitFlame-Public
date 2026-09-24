@@ -7,6 +7,7 @@
   --ember: #f08a24;
   --ember-deep: #b4520a;
   --ember-glow: rgba(240, 138, 36, 0.35);
+  --link: var(--ember);
   --ink: #f6efe6;
   --ink-2: #c9bdb0;
   --ink-3: #8f8479;
@@ -22,9 +23,10 @@
     --bg-3: #eadfd0;
     --line: rgba(33, 24, 16, 0.14);
     --line-strong: rgba(33, 24, 16, 0.3);
-    --ember: #c4610d;
+    --ember: #c6620d;
     --ember-deep: #8f4306;
     --ember-glow: rgba(196, 97, 13, 0.25);
+    --link: #9a4a08;
     --ink: #211810;
     --ink-2: #4e4034;
     --ink-3: #7a6a5c;
@@ -49,7 +51,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--ember); text-underline-offset: 0.15em; }
+a { color: var(--link); text-underline-offset: 0.15em; }
 a:hover { color: var(--ink); }
 a:focus-visible, button:focus-visible {
   outline: 2px solid var(--ember);
@@ -152,7 +154,7 @@ h1 {
   border-radius: 999px;
   box-shadow: 0 8px 30px var(--ember-glow);
 }
-.store:hover { background: var(--ink); color: #15120f; }
+.store:hover { background: var(--ember-deep); color: #fff; }
 .store-note { margin-top: 0.8rem; color: var(--ink-3); font-size: 0.9rem; }
 
 /* Ledger: the one bold element */
@@ -249,7 +251,7 @@ section h2 {
 .guides li { padding: 1rem 0; border-top: 1px solid var(--line); }
 .guides li:last-child { border-bottom: 1px solid var(--line); }
 .guides a { font-weight: 700; font-size: 1.1rem; text-decoration: none; color: var(--ink); }
-.guides a:hover { color: var(--ember); }
+.guides a:hover { color: var(--link); }
 .guides p { color: var(--ink-3); max-width: 60ch; margin-top: 0.2rem; font-size: 0.95rem; }
 
 .faq dt { font-weight: 700; margin-top: 1.3rem; max-width: var(--measure); }
@@ -264,7 +266,7 @@ section h2 {
 .cta p { color: var(--ink-2); max-width: var(--measure); }
 
 /* Article pages */
-.article { max-width: 760px; }
+.guide { max-width: 760px; }
 .article-head { padding: clamp(2rem, 6vw, 4rem) 0 1rem; }
 .article-head .deck { max-width: var(--measure); }
 .article-body { padding-top: 1rem; }
