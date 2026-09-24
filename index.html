@@ -1,643 +1,198 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HabitFlame - Build Streaks. Stay Consistent.</title>
-
-    <!-- SEO Meta Tags -->
-    <meta name="description" content="Transform your daily routines into lasting habits with beautiful tracking, powerful streaks, and focused work sessions. Available on iOS.">
-    <meta name="keywords" content="habit tracker, streak tracker, habits, productivity, iOS app, focus timer, pomodoro">
-    <meta name="author" content="Vishut Dhar">
-
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://vishutdhar.github.io/HabitFlame-Public/">
-    <meta property="og:title" content="HabitFlame - Build Streaks. Stay Consistent.">
-    <meta property="og:description" content="Transform your daily routines into lasting habits with beautiful tracking, powerful streaks, and focused work sessions. Available on iOS.">
-    <meta property="og:image" content="https://vishutdhar.github.io/HabitFlame-Public/app-icon.png">
-    <meta property="og:image:width" content="1024">
-    <meta property="og:image:height" content="1024">
-
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:url" content="https://vishutdhar.github.io/HabitFlame-Public/">
-    <meta name="twitter:title" content="HabitFlame - Build Streaks. Stay Consistent.">
-    <meta name="twitter:description" content="Transform your daily routines into lasting habits with beautiful tracking, powerful streaks, and focused work sessions. Available on iOS.">
-    <meta name="twitter:image" content="https://vishutdhar.github.io/HabitFlame-Public/app-icon.png">
-
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="app-icon.png">
-    <link rel="apple-touch-icon" href="app-icon.png">
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #0D0D0F;
-            --bg-secondary: #1C1C1E;
-            --bg-tertiary: #2C2C2E;
-            --accent: #E67E00;
-            --accent-glow: rgba(230, 126, 0, 0.4);
-            --accent-soft: rgba(230, 126, 0, 0.15);
-            --text-primary: #FFFFFF;
-            --text-secondary: rgba(255, 255, 255, 0.7);
-            --text-tertiary: rgba(255, 255, 255, 0.5);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        html {
-            scroll-behavior: smooth;
-        }
-
-        body {
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
-
-        /* Ambient background effects */
-        .bg-glow {
-            position: fixed;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(ellipse at 30% 20%, var(--accent-glow) 0%, transparent 50%),
-                        radial-gradient(ellipse at 70% 80%, rgba(230, 126, 0, 0.2) 0%, transparent 40%);
-            pointer-events: none;
-            z-index: 0;
-            animation: pulseGlow 8s ease-in-out infinite alternate;
-        }
-
-        @keyframes pulseGlow {
-            0% { opacity: 0.3; transform: scale(1) rotate(0deg); }
-            100% { opacity: 0.5; transform: scale(1.1) rotate(5deg); }
-        }
-
-        /* Navigation */
-        nav {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            padding: 1.5rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            backdrop-filter: blur(20px);
-            background: rgba(13, 13, 15, 0.8);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-weight: 700;
-            font-size: 1.25rem;
-            text-decoration: none;
-            color: var(--text-primary);
-        }
-
-        .logo-icon {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, #FF9500 0%, #E67E00 50%, #CC6B00 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.25rem;
-            box-shadow: 0 4px 20px var(--accent-glow);
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .nav-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-weight: 500;
-            transition: color 0.3s;
-        }
-
-        .nav-links a:hover {
-            color: var(--text-primary);
-        }
-
-        /* Hero Section */
-        .hero {
-            position: relative;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 8rem 2rem 4rem;
-            text-align: center;
-            z-index: 1;
-        }
-
-        .hero-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: var(--accent-soft);
-            border: 1px solid rgba(230, 126, 0, 0.3);
-            border-radius: 100px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            color: var(--accent);
-            margin-bottom: 2rem;
-            animation: fadeInUp 0.8s ease-out;
-        }
-
-        .hero-badge::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            background: var(--accent);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-        }
-
-        .hero h1 {
-            font-size: clamp(3rem, 8vw, 5.5rem);
-            font-weight: 800;
-            line-height: 1.1;
-            margin-bottom: 1.5rem;
-            animation: fadeInUp 0.8s ease-out 0.1s both;
-        }
-
-        .hero h1 .gradient {
-            background: linear-gradient(135deg, #FF9500 0%, #E67E00 50%, #FFB347 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .hero-subtitle {
-            font-size: clamp(1.1rem, 2.5vw, 1.35rem);
-            color: var(--text-secondary);
-            max-width: 540px;
-            margin: 0 auto 3rem;
-            animation: fadeInUp 0.8s ease-out 0.2s both;
-        }
-
-        .hero-cta {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            justify-content: center;
-            animation: fadeInUp 0.8s ease-out 0.3s both;
-        }
-
-        .btn-primary {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 1rem 2rem;
-            background: linear-gradient(135deg, #FF9500 0%, #E67E00 100%);
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 1rem;
-            border-radius: 14px;
-            transition: all 0.3s;
-            box-shadow: 0 4px 24px var(--accent-glow);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px var(--accent-glow);
-        }
-
-        .btn-primary svg {
-            width: 24px;
-            height: 24px;
-        }
-
-        .btn-secondary {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 1rem 2rem;
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 1rem;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s;
-        }
-
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Phone Mockup */
-        .phone-mockup {
-            position: relative;
-            margin-top: 4rem;
-            animation: fadeInUp 1s ease-out 0.4s both;
-        }
-
-        .phone-frame {
-            position: relative;
-            width: 280px;
-            height: 580px;
-            background: linear-gradient(145deg, #2C2C2E 0%, #1C1C1E 100%);
-            border-radius: 50px;
-            padding: 12px;
-            box-shadow:
-                0 50px 100px -20px rgba(0, 0, 0, 0.7),
-                0 30px 60px -30px rgba(0, 0, 0, 0.5),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1),
-                0 0 0 1px rgba(255, 255, 255, 0.05);
-        }
-
-        .phone-screen {
-            width: 100%;
-            height: 100%;
-            border-radius: 40px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .phone-screen img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: top;
-        }
-
-        /* Floating elements */
-        .floating-badge {
-            position: absolute;
-            background: var(--bg-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-            animation: float 4s ease-in-out infinite;
-        }
-
-        .floating-badge.left {
-            left: -80px;
-            top: 30%;
-            animation-delay: 0s;
-        }
-
-        .floating-badge.right {
-            right: -80px;
-            top: 50%;
-            animation-delay: 2s;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .floating-badge .icon {
-            width: 36px;
-            height: 36px;
-            background: var(--accent);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-        }
-
-        .floating-badge .text {
-            font-size: 0.85rem;
-        }
-
-        .floating-badge .text strong {
-            display: block;
-            font-weight: 700;
-        }
-
-        .floating-badge .text span {
-            color: var(--text-tertiary);
-            font-size: 0.75rem;
-        }
-
-        /* Features Section */
-        .features {
-            position: relative;
-            z-index: 1;
-            padding: 8rem 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .section-header {
-            text-align: center;
-            margin-bottom: 4rem;
-        }
-
-        .section-header h2 {
-            font-size: clamp(2rem, 5vw, 3rem);
-            font-weight: 800;
-            margin-bottom: 1rem;
-        }
-
-        .section-header p {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .feature-card {
-            background: linear-gradient(145deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 24px;
-            padding: 2rem;
-            transition: all 0.4s;
-        }
-
-        .feature-card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(230, 126, 0, 0.3);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .feature-icon {
-            width: 56px;
-            height: 56px;
-            background: var(--accent-soft);
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            margin-bottom: 1.25rem;
-        }
-
-        .feature-card h3 {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 0.75rem;
-        }
-
-        .feature-card p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            line-height: 1.7;
-        }
-
-        /* CTA Section */
-        .cta {
-            position: relative;
-            z-index: 1;
-            padding: 6rem 2rem;
-            text-align: center;
-        }
-
-        .cta-box {
-            max-width: 700px;
-            margin: 0 auto;
-            background: linear-gradient(145deg, var(--bg-secondary) 0%, rgba(230, 126, 0, 0.1) 100%);
-            border: 1px solid rgba(230, 126, 0, 0.2);
-            border-radius: 32px;
-            padding: 4rem 2rem;
-        }
-
-        .cta h2 {
-            font-size: clamp(1.75rem, 4vw, 2.5rem);
-            font-weight: 800;
-            margin-bottom: 1rem;
-        }
-
-        .cta p {
-            color: var(--text-secondary);
-            margin-bottom: 2rem;
-            font-size: 1.1rem;
-        }
-
-        /* Footer */
-        footer {
-            position: relative;
-            z-index: 1;
-            padding: 3rem 2rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            text-align: center;
-        }
-
-        .footer-links {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .footer-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: color 0.3s;
-        }
-
-        .footer-links a:hover {
-            color: var(--accent);
-        }
-
-        .footer-copy {
-            color: var(--text-tertiary);
-            font-size: 0.85rem;
-        }
-
-        /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            nav {
-                padding: 1rem;
-            }
-
-            .nav-links {
-                display: none;
-            }
-
-            .hero {
-                padding: 7rem 1.5rem 3rem;
-            }
-
-            .phone-mockup {
-                transform: scale(0.85);
-            }
-
-            .floating-badge {
-                display: none;
-            }
-
-            .features {
-                padding: 4rem 1.5rem;
-            }
-
-            .cta-box {
-                padding: 3rem 1.5rem;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HabitFlame: habit tracker with an accountability partner</title>
+<meta name="description" content="HabitFlame is an iPhone habit tracker. Keep streaks alive and pair with a partner who nudges you and, with Premium, sees every shared win. Premium is paid once.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://vishutdhar.github.io/HabitFlame-Public/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="HabitFlame">
+<meta property="og:url" content="https://vishutdhar.github.io/HabitFlame-Public/">
+<meta property="og:title" content="HabitFlame: habit tracker with an accountability partner">
+<meta property="og:description" content="HabitFlame is an iPhone habit tracker. Keep streaks alive and pair with a partner who nudges you and, with Premium, sees every shared win. Premium is paid once.">
+<meta property="og:image" content="https://vishutdhar.github.io/HabitFlame-Public/app-icon.png">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="1024">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="HabitFlame: habit tracker with an accountability partner">
+<meta name="twitter:description" content="HabitFlame is an iPhone habit tracker. Keep streaks alive and pair with a partner who nudges you and, with Premium, sees every shared win. Premium is paid once.">
+<meta name="twitter:image" content="https://vishutdhar.github.io/HabitFlame-Public/app-icon.png">
+<link rel="icon" type="image/png" href="https://vishutdhar.github.io/HabitFlame-Public/app-icon.png">
+<link rel="apple-touch-icon" href="https://vishutdhar.github.io/HabitFlame-Public/app-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://vishutdhar.github.io/HabitFlame-Public/styles.css?v=20260924">
+<script type="application/ld+json">{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "WebSite",
+   "@id": "https://vishutdhar.github.io/HabitFlame-Public/#website",
+   "name": "HabitFlame",
+   "url": "https://vishutdhar.github.io/HabitFlame-Public/"
+  },
+  {
+   "@type": "SoftwareApplication",
+   "name": "HabitFlame",
+   "operatingSystem": "iOS",
+   "applicationCategory": "HealthApplication",
+   "url": "https://apps.apple.com/us/app/habit-flame-streak-tracker/id6756961710",
+   "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+   }
+  },
+  {
+   "@type": "WebPage",
+   "@id": "https://vishutdhar.github.io/HabitFlame-Public/#webpage",
+   "name": "HabitFlame: habit tracker with an accountability partner",
+   "description": "HabitFlame is an iPhone habit tracker. Keep streaks alive and pair with a partner who nudges you and, with Premium, sees every shared win. Premium is paid once.",
+   "url": "https://vishutdhar.github.io/HabitFlame-Public/",
+   "isPartOf": {
+    "@id": "https://vishutdhar.github.io/HabitFlame-Public/#website"
+   }
+  },
+  {
+   "@type": "FAQPage",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "Is HabitFlame free?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Yes. The free version tracks up to 5 habits with every tracking type, streaks, badges, widgets, reminders, the focus timer, iCloud sync, Apple Health and an accountability partner with 3 nudges a month. Premium is a one-time purchase of $9.99 that removes the habit limit and adds habit stacking, smart insights, real-time partner updates and unlimited nudges."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Do I need an account?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. HabitFlame works the moment you open it. Your habits are stored on your device and in your own iCloud. With Premium, the shared habits you complete are delivered to your partner through HabitFlame's pairing service and Apple push notifications. Without Premium, the service carries your nudges, reactions and a weekly count of your completions, never individual habits. What pairing itself stores is set out in the privacy policy. Pairing with a partner uses an invite link, not a username or password."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Which devices does it run on?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "HabitFlame is an iPhone and iPad app from the App Store. There is no Android or web version."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "Does my partner need to pay?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. Pairing, reactions and nudges are free for both of you. Real-time partner updates are bought by the person whose completions are sent: if you have Premium, your partner gets each of your shared completions instantly without paying. With both of you on the free version, you see a combined weekly count of what you completed and can nudge each other."
+     }
+    }
+   ]
+  }
+ ]
+}</script>
 </head>
-<body>
-    <div class="bg-glow"></div>
-
-    <nav>
-        <a href="#" class="logo">
-            <div class="logo-icon">🔥</div>
-            HabitFlame
-        </a>
-        <div class="nav-links">
-            <a href="#features">Features</a>
-            <a href="privacy-policy.html" target="_blank">Privacy</a>
-            <a href="terms-of-service.html" target="_blank">Terms</a>
-        </div>
-    </nav>
-
-    <section class="hero">
-        <div class="hero-badge">
-            Available on iOS
-        </div>
-        <h1>Build <span class="gradient">Streaks</span>.<br>Stay Consistent.</h1>
-        <p class="hero-subtitle">Transform your daily routines into lasting habits with beautiful tracking, powerful streaks, and focused work sessions.</p>
-        <div class="hero-cta">
-            <a href="https://apps.apple.com/us/app/habitflame/id6756961710" class="btn-primary">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-                </svg>
-                Download on App Store
-            </a>
-        </div>
-
-        <div class="phone-mockup">
-            <div class="floating-badge left">
-                <div class="icon">🎯</div>
-                <div class="text">
-                    <strong>7 Day Streak!</strong>
-                    <span>Keep it going</span>
-                </div>
-            </div>
-            <div class="floating-badge right">
-                <div class="icon">⏱️</div>
-                <div class="text">
-                    <strong>Focus Mode</strong>
-                    <span>25 min session</span>
-                </div>
-            </div>
-            <div class="phone-frame">
-                <div class="phone-screen">
-                    <img src="screenshot.png" alt="HabitFlame App Screenshot">
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="features" id="features">
-        <div class="section-header">
-            <h2>Everything you need to build better habits</h2>
-            <p>Simple yet powerful tools designed to help you stay consistent every single day.</p>
-        </div>
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <h3>Flexible Tracking</h3>
-                <p>Track habits your way - simple yes/no, count-based goals like "8 glasses of water", or duration-based like "30 minutes reading".</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🔥</div>
-                <h3>Streak Motivation</h3>
-                <p>Build momentum with visual streaks. Celebrate milestones at 7, 30, and 100 days with satisfying animations and haptic feedback.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">⏱️</div>
-                <h3>Focus Timer</h3>
-                <p>Built-in Pomodoro timer helps you stay focused. Perfect for habits that need dedicated time like studying or deep work.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">📈</div>
-                <h3>Beautiful Stats</h3>
-                <p>Visualize your progress with weekly charts, completion rates, and habit breakdowns. See how far you've come.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🌙</div>
-                <h3>Dark Mode</h3>
-                <p>Gorgeous dark interface that's easy on the eyes. Perfect for checking your habits morning or night.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🔒</div>
-                <h3>Privacy First</h3>
-                <p>Your data stays on your device. No accounts, no tracking, no ads. Just you and your habits.</p>
-            </div>
-        </div>
-    </section>
-
-    <section class="cta">
-        <div class="cta-box">
-            <h2>Start building better habits today</h2>
-            <p>Join thousands who've transformed their daily routines with HabitFlame.</p>
-            <a href="https://apps.apple.com/us/app/habitflame/id6756961710" class="btn-primary">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-                </svg>
-                Download Free on App Store
-            </a>
-        </div>
-    </section>
-
-    <footer>
-        <div class="footer-links">
-            <a href="privacy-policy.html" target="_blank">Privacy Policy</a>
-            <a href="terms-of-service.html" target="_blank">Terms of Service</a>
-            <a href="mailto:support@freedom-terminal.com">Contact</a>
-        </div>
-        <p class="footer-copy">&copy; 2025 HabitFlame. All rights reserved.</p>
-    </footer>
+<body class="landing">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <a class="brand" href="https://vishutdhar.github.io/HabitFlame-Public/"><span class="mark" aria-hidden="true"></span>HabitFlame</a>
+  <nav class="top-links" aria-label="Site">
+    <a href="https://vishutdhar.github.io/HabitFlame-Public/#guides">Guides</a>
+    <a href="https://vishutdhar.github.io/HabitFlame-Public/support.html">Support</a>
+    <a class="store-link" href="https://apps.apple.com/us/app/habit-flame-streak-tracker/id6756961710">App Store</a>
+  </nav>
+</header>
+<main id="main">
+<section class="hero">
+<div class="hero-copy">
+<h1>Habits stick when someone is watching.</h1>
+<p class="deck">HabitFlame is an iPhone habit tracker built around one idea: pair with a friend, partner or family member, and with Premium each shared habit you complete shows up on their phone the moment it happens. Streaks, a focus timer and reminders do the rest.</p>
+<a class="store" href="https://apps.apple.com/us/app/habit-flame-streak-tracker/id6756961710">Get HabitFlame on the App Store</a>
+<p class="store-note">Free to download for iPhone and iPad. Premium is a one-time $9.99 purchase.</p>
+</div>
+<div class="ledger">
+<div class="ledger-grid" role="img" aria-label="A week of habits side by side. Sam has a flame on every day. You have a flame on every day except Sunday, which is still open.">
+<div class="ledger-row days" aria-hidden="true"><span></span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+<div class="ledger-row"><span class="ledger-name">You</span><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame open"></div></div>
+<div class="ledger-row"><span class="ledger-name">Sam</span><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div><div class="flame lit"></div></div>
+</div>
+<p class="ledger-nudge"><b>Sam</b> nudged you: still time for your walk.</p>
+<p class="ledger-caption">You and your partner, one week, side by side. Every flame is a habit one of you completed.</p>
+</div>
+</section>
+<section>
+<h2>What the app does</h2>
+<ul class="rows">
+<li><h3>Track any habit your way</h3>
+<p>Yes or no, a count, a duration, or a multi check-in for habits you do 2 to 4 times a day. Schedule each habit every day, on specific days, or as a weekly target.</p></li>
+<li><h3>Keep the streak alive</h3>
+<p>See your current and longest streak for every habit. Milestones at 7, 14, 21, 30, 50, 75, 100, 150, 200, 365, 500 and 1000 days get a celebration, and 16 achievement badges mark the bigger wins.</p></li>
+<li><h3>Pair with an accountability partner</h3>
+<p>Send an invite link and pair for free. With Premium, every habit you share and complete is sent to your partner the moment it happens, with milestone alerts and an evening warning when a streak is at risk; your partner does not need Premium to receive them. Free accounts get 3 nudges a month and a combined weekly count of what you both completed.</p></li>
+<li><h3>Focus with a built-in timer</h3>
+<p>A Pomodoro timer runs 25 minute work sessions with 5 minute breaks and a 15 minute long break, so a habit like reading or deep work has its time carved out.</p></li>
+<li><h3>Get reminders that change</h3>
+<p>Set a reminder time per habit. The wording varies from day to day instead of repeating the same alert.</p></li>
+<li><h3>Glance from the home screen</h3>
+<p>Interactive widgets show today&#x27;s habits, your progress and streaks, and a partner widget shows how their day is going when they have Premium. Tap to complete without opening the app.</p></li>
+</ul>
+</section>
+<section>
+<h2>Free to start, one payment to unlock everything</h2>
+<div class="premium-band">
+<p>The free version includes 5 habits, all tracking types, streaks, badges, widgets, iCloud sync, Apple Health and a partner with 3 nudges a month. Premium is a one-time purchase of <span class="price">$9.99</span>, not a subscription, and adds unlimited habits, habit stacking, smart insights, real-time partner updates and unlimited partner nudges.</p>
+</div>
+</section>
+<section id="guides">
+<h2>Guides</h2>
+<p class="section-intro">Longer answers to the questions people ask before choosing a habit app.</p>
+<ul class="guides">
+<li><a href="https://vishutdhar.github.io/HabitFlame-Public/accountability-partner-habit-tracker/">Habit tracker with an accountability partner</a>
+<p>A habit tracker where a partner can nudge you, react and, with Premium, see each shared habit you complete. How HabitFlame&#x27;s accountability partner works.</p></li>
+<li><a href="https://vishutdhar.github.io/HabitFlame-Public/streak-tracker-app/">Streak tracker app for iPhone</a>
+<p>HabitFlame is a streak tracker for iPhone with milestone celebrations, a full year view and, with Premium, a partner who sees your streak grow.</p></li>
+<li><a href="https://vishutdhar.github.io/HabitFlame-Public/pomodoro-habit-app/">Pomodoro habit app: focus timer and habit tracker</a>
+<p>HabitFlame pairs a Pomodoro focus timer with a habit tracker on iPhone: 25 minute sessions, timed breaks and a Live Activity, then log the minutes.</p></li>
+<li><a href="https://vishutdhar.github.io/HabitFlame-Public/habit-app-for-couples/">Habit app for couples and partners</a>
+<p>A habit app two people can use together. Pair with your partner in HabitFlame, share the habits you choose, react to each other&#x27;s wins and nudge each other.</p></li>
+<li><a href="https://vishutdhar.github.io/HabitFlame-Public/daily-habit-tracker-with-reminders/">Daily habit tracker with reminders</a>
+<p>A daily habit tracker for iPhone with a reminder time per habit, wording that changes, widgets and a partner who can nudge you when you go quiet.</p></li>
+<li><a href="https://vishutdhar.github.io/HabitFlame-Public/habitflame-vs-habitshare/">HabitFlame vs HabitShare: habit tracking with a partner</a>
+<p>HabitShare and HabitFlame both pair you with a friend for your habits. Where they differ: platforms, price, timer, widgets, nudges and recent updates.</p></li>
+</ul>
+</section>
+<section class="faq">
+<h2>Questions</h2>
+<dl>
+<dt>Is HabitFlame free?</dt>
+<dd>Yes. The free version tracks up to 5 habits with every tracking type, streaks, badges, widgets, reminders, the focus timer, iCloud sync, Apple Health and an accountability partner with 3 nudges a month. Premium is a one-time purchase of $9.99 that removes the habit limit and adds habit stacking, smart insights, real-time partner updates and unlimited nudges.</dd>
+<dt>Do I need an account?</dt>
+<dd>No. HabitFlame works the moment you open it. Your habits are stored on your device and in your own iCloud. With Premium, the shared habits you complete are delivered to your partner through HabitFlame&#x27;s pairing service and Apple push notifications. Without Premium, the service carries your nudges, reactions and a weekly count of your completions, never individual habits. What pairing itself stores is set out in the <a href="https://vishutdhar.github.io/HabitFlame-Public/privacy-policy.html">privacy policy</a>. Pairing with a partner uses an invite link, not a username or password.</dd>
+<dt>Which devices does it run on?</dt>
+<dd>HabitFlame is an iPhone and iPad app from the App Store. There is no Android or web version.</dd>
+<dt>Does my partner need to pay?</dt>
+<dd>No. Pairing, reactions and nudges are free for both of you. Real-time partner updates are bought by the person whose completions are sent: if you have Premium, your partner gets each of your shared completions instantly without paying. With both of you on the free version, you see a combined weekly count of what you completed and can nudge each other.</dd>
+</dl>
+</section>
+<section class="cta">
+<h2>Start with one habit and one person</h2>
+<p>Download HabitFlame, add a habit, and send one invite link.</p>
+<a class="store" href="https://apps.apple.com/us/app/habit-flame-streak-tracker/id6756961710">Get HabitFlame on the App Store</a>
+</section>
+</main>
+<footer class="foot">
+  <nav class="foot-links" aria-label="Legal">
+    <a href="https://vishutdhar.github.io/HabitFlame-Public/support.html">Support</a>
+    <a href="https://vishutdhar.github.io/HabitFlame-Public/privacy-policy.html">Privacy Policy</a>
+    <a href="https://vishutdhar.github.io/HabitFlame-Public/terms-of-service.html">Terms of Service</a>
+    <a href="mailto:support@freedom-terminal.com">support@freedom-terminal.com</a>
+  </nav>
+  <p class="foot-brand"><a href="https://freedom-terminal.com/">A Freedom Terminal product</a></p>
+  <p class="foot-copy">&copy; 2026 HabitFlame</p>
+</footer>
 </body>
 </html>
