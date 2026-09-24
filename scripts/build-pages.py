@@ -13,8 +13,9 @@ Outputs (all at the repo root):
   <site.verification_file>   the Google Search Console ownership file
 
 Rendering is deterministic: the same pages.json and template give the same
-bytes. The only date is the sitemap lastmod, which is site.lastmod in
-pages.json, so a rebuild on another day changes nothing.
+bytes. The only dates are the sitemap lastmod values: each page's "lastmod"
+in pages.json and site.policy_lastmod for the policy pages, so a rebuild on
+another day changes nothing.
 """
 import datetime
 import html
@@ -308,13 +309,25 @@ def sitemap_urls() -> list[str]:
     return [f"{BASE}/"] + [page_url(p) for p in PAGES] + [f"{BASE}/{name}" for name in POLICY_PAGES]
 
 
-def render_sitemap() -> str:
-    date = SITE["lastmod"]
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
-        raise ValueError(f"site.lastmod must be YYYY-MM-DD, got {date!r}")
+def checked_date(date: str, where: str) -> str:
+    if not isinstance(date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        raise ValueError(f"{where} must be YYYY-MM-DD, got {date!r}")
     datetime.date.fromisoformat(date)  # and a real date
-    entries = "\n".join(f"  <url>\n    <loc>{esc(u)}</loc>\n    <lastmod>{date}</lastmod>\n  </url>"
-                        for u in sitemap_urls())
+    return date
+
+
+def sitemap_entries() -> list[tuple[str, str]]:
+    """(URL, lastmod) for the landing, every guide and the policy pages."""
+    entries = [(f"{BASE}/", checked_date(LANDING["lastmod"], "landing.lastmod"))]
+    entries += [(page_url(p), checked_date(p["lastmod"], f"{p['slug']}.lastmod")) for p in PAGES]
+    entries += [(f"{BASE}/{name}", checked_date(SITE["policy_lastmod"][name], f"site.policy_lastmod[{name}]"))
+                for name in POLICY_PAGES]
+    return entries
+
+
+def render_sitemap() -> str:
+    entries = "\n".join(f"  <url>\n    <loc>{esc(u)}</loc>\n    <lastmod>{d}</lastmod>\n  </url>"
+                        for u, d in sitemap_entries())
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             f"{entries}\n</urlset>\n")

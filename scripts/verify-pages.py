@@ -15,6 +15,7 @@ import html as htmlmod
 import json
 import pathlib
 import re
+import subprocess
 import sys
 import types
 import unicodedata
@@ -248,7 +249,15 @@ def iso_date(value) -> bool:
         return False
 
 
-check(iso_date(SITE.get("lastmod")), f"site.lastmod {SITE.get('lastmod')!r} is not a YYYY-MM-DD date")
+POLICY_NAMES = ["support.html", "privacy-policy.html", "terms-of-service.html"]
+DATES = {"landing": LANDING.get("lastmod")}
+DATES.update({p["slug"]: p.get("lastmod") for p in PAGES})
+policy_lastmod = SITE.get("policy_lastmod") or {}
+check(sorted(policy_lastmod) == sorted(POLICY_NAMES), f"site.policy_lastmod keys are {sorted(policy_lastmod)}, want {sorted(POLICY_NAMES)}")
+DATES.update({name: policy_lastmod.get(name) for name in POLICY_NAMES})
+check("lastmod" not in SITE, "site.lastmod is retired; dates live on each page and in site.policy_lastmod")
+for key, value in DATES.items():
+    check(iso_date(value), f"lastmod for {key} is {value!r}, not a YYYY-MM-DD date")
 
 # ---- 5. Facts and the number allowlist --------------------------------------
 
@@ -267,7 +276,7 @@ check(re.fullmatch(r"\$\d+\.\d\d", FACTS["price"]) is not None, f"facts.price {F
 
 try:
     FRESH = gen.outputs()
-except Exception as e:  # a malformed lastmod raises here; report and stop
+except Exception as e:  # a malformed or missing lastmod raises here; report and stop
     print(f"FAIL   generator raised {type(e).__name__}: {e}")
     for f in failures:
         print(f"FAIL   {f}")
@@ -404,6 +413,8 @@ premium_phrases = [(p, whole(p)) for p in FACTS["premium_only"]]
 VIS_SUBJ = re.compile(r"\b(partner|partners|friend|friends|they|them|their|sister|someone|person|other)\b", re.I)
 VIS_VERB = re.compile(r"\b(see|sees|seen|watch|watches|told|show|shows|shown|notice|notices|follow|appear|appears|reach|reaches)\b", re.I)
 VIS_OBJ = re.compile(r"\b(completion|completions|complete|completed|streak|streaks|done today|widget|feed|progress|did|habit|habits)\b", re.I)
+EVERY_COMPLETION = re.compile(r"\b(every|each)\b(?:\s+[\w']+){0,2}?\s+(habit you complete|habits you complete|completions?|win|wins)\b|\b(every|each)\s+(completion|win)\b", re.I)
+RECEIVER = re.compile(r"\b(partner|partners|their phone|receives|they see|sees|gets)\b", re.I)
 VIS_OK = re.compile(r"\bPremium\b|weekly count|nudge", re.I)
 visibility_forms = {f.strip().lower(): 0 for f in FACTS.get("visibility_forms", [])}
 banned = [(p, whole_or_plural(p)) for p in FACTS["banned_phrases"]]
@@ -587,6 +598,14 @@ for page, rel in HTML_PAGES:
                 if phrase.lower() in comp_phrases and exempt:
                     continue
                 failures.append(f"{rel}: '{phrase}' outside every facts.negated_forms entry, in {where}: {text!r}")
+
+    # o. Where a partner receives "each" or "every" completion, habit or win,
+    #    the sentence says the completions are shared ones.
+    for text, _exempt, where in units:
+        if where.startswith(("JSON-LD", "og:", "twitter:")):
+            continue
+        if EVERY_COMPLETION.search(text) and RECEIVER.search(text) and not re.search(r"\bshare(d)?\b", text, re.I):
+            failures.append(f"{rel}: a partner receives every completion without 'shared', in {where}: {text!r}")
 
     # m. A sentence where a partner sees, is shown or follows a completion,
     #    streak, widget, feed or progress must carry the Premium condition, the
@@ -830,7 +849,7 @@ for s in strings(gen.CONFIG):
         failures.append(f"scripts/pages.json: spaced hyphen in {s[:80]!r}")
 
 # i. Sitemap lists exactly the landing, the guides and the policy pages, each
-#    dated site.lastmod.
+#    dated by its own configured lastmod.
 sitemap = FRESH["sitemap.xml"]
 locs = [htmlmod.unescape(u) for u in re.findall(r"<loc>([^<]*)</loc>", sitemap)]
 EXPECTED_URLS = [
@@ -851,9 +870,38 @@ want_locs = EXPECTED_URLS
 check(len(locs) == len(set(locs)), f"sitemap.xml: duplicate URLs {sorted({u for u in locs if locs.count(u) > 1})}")
 check(set(locs) == set(want_locs), f"sitemap.xml: lists {sorted(set(locs) ^ set(want_locs))} unexpectedly or misses them")
 check(len(locs) == 1 + len(PAGES) + len(gen.POLICY_PAGES), f"sitemap.xml: {len(locs)} URLs")
-lastmods = re.findall(r"<lastmod>([^<]*)</lastmod>", sitemap)
-check(len(lastmods) == len(locs) and set(lastmods) == {SITE.get("lastmod")},
-      f"sitemap.xml: lastmod values {sorted(set(lastmods))} differ from site.lastmod {SITE.get('lastmod')!r}")
+pairs = [(htmlmod.unescape(u), d) for u, d in re.findall(r"<loc>([^<]*)</loc>\s*<lastmod>([^<]*)</lastmod>", sitemap)]
+check(len(pairs) == len(locs), f"sitemap.xml: {len(locs)} URLs but {len(pairs)} have a lastmod")
+url_date = {f"{BASE}/": DATES["landing"]}
+url_date.update({f"{BASE}/{p['slug']}/": DATES[p["slug"]] for p in PAGES})
+url_date.update({f"{BASE}/{n}": DATES[n] for n in POLICY_NAMES})
+for u, d in pairs:
+    check(iso_date(d), f"sitemap.xml: lastmod {d!r} for {u} is not a YYYY-MM-DD date")
+    check(d == url_date.get(u), f"sitemap.xml: lastmod for {u} is {d}, configured {url_date.get(u)}")
+
+# i2. A policy page identical to origin/main keeps a date no later than its
+#     last change on origin/main; a page changed on this branch is dated no
+#     earlier than that change. Read only: git show and git log.
+def git(*args: str) -> "bytes | None":
+    r = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True)
+    return r.stdout if r.returncode == 0 else None
+
+
+if git("rev-parse", "--verify", "-q", "origin/main") is None:
+    failures.append("git: cannot read origin/main, so policy page dates cannot be checked (run git fetch)")
+else:
+    for name in POLICY_NAMES:
+        on_main = git("show", f"origin/main:{name}")
+        main_date = (git("log", "-1", "--format=%ad", "--date=short", "origin/main", "--", name) or b"").decode().strip()
+        here = (ROOT / name).read_bytes()
+        conf = DATES.get(name)
+        if on_main is None or not main_date or not iso_date(conf):
+            failures.append(f"git: cannot compare {name} with origin/main")
+            continue
+        if here == on_main:
+            check(conf <= main_date, f"{name}: unchanged from origin/main (last changed {main_date}) but dated {conf}")
+        else:
+            check(conf >= main_date, f"{name}: changed on this branch but dated {conf}, before its origin/main change on {main_date}")
 for u in locs:
     rel = u[len(BASE) + 1:] if u.startswith(BASE + "/") else None
     if rel is None:
@@ -863,7 +911,7 @@ for u in locs:
     check(f.is_file(), f"sitemap.xml: {u} does not resolve to a file")
 # j. The privacy policy (hand written, not generated) says what the app does.
 POLICY = (ROOT / "privacy-policy.html").read_text(encoding="utf-8")
-for must in ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings", "weekly count", SITE["contact_email"]):
+for must in ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings", "weekly count", "Nudges and reactions", SITE["contact_email"]):
     check(must in POLICY, f"privacy-policy.html: missing {must!r}")
 for stale in ("We do not collect any personal information", "do not use analytics", "do not have servers",
               "does not integrate with any third-party analytics"):
@@ -896,7 +944,10 @@ for rel, text in FRESH.items():
 check(FRESH["robots.txt"] == f"User-agent: *\nAllow: /\nSitemap: {PINNED_BASE_URL}/sitemap.xml\n", "robots.txt: content changed")
 
 # ---- Report ------------------------------------------------------------------
-print(f"sitemap lastmod {SITE.get('lastmod')}")
+counts: dict[str, int] = {}
+for value in DATES.values():
+    counts[str(value)] = counts.get(str(value), 0) + 1
+print("sitemap lastmod " + ", ".join(f"{d} ({n} entries)" for d, n in sorted(counts.items())))
 for line in contrast_lines:
     print(line)
 for name, n in word_counts:
