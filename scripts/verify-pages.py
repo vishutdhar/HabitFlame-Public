@@ -83,6 +83,8 @@ RETIRED_POLICY_SENTENCES = (
     "Deleting the app removes the data stored on your device. It does not",
     "For every invite, the pairing service also keeps a permanent record",
     "either automatically through your iCloud account or with a code",
+    "and phone numbers are removed from event details", "Premium is bought per person",
+    "purchase per person", "on the side of whoever buys it", "Real-time partner updates are bought by",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -242,6 +244,11 @@ for must in SUPPORT_MUST:
 
 # 6. Byte equality with the canonical copy, when asked.
 if args.source:
+    # Byte equality only proves the copy; the canonical site's own checker
+    # proves the content, so run it on the same checkout first.
+    import subprocess
+    canon = subprocess.run([sys.executable, str(args.source / "scripts" / "verify-pages.py")], capture_output=True, text=True)
+    check(canon.returncode == 0, f"{args.source}: its scripts/verify-pages.py failed: {canon.stdout.strip().splitlines()[-1:] or canon.stderr.strip()[-200:]}")
     for rel, (source, _url) in MIRROR.items():
         src = args.source / source
         check(src.is_file() and rel in pages and src.read_bytes() == pages[rel].encode("utf-8"),

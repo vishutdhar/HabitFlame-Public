@@ -14,6 +14,9 @@ To update the mirror after a change in habitflame-web:
     python3 scripts/sync-mirror.py ~/Code/habitflame-web
     python3 scripts/verify-pages.py --source ~/Code/habitflame-web
 
+`--source` also runs habitflame-web's own verifier on that checkout, so the
+copy is only accepted when the canonical pages pass their checks.
+
 After the custom domain deploys, `python3 scripts/verify-pages.py --live`
 confirms the mirror matches what it serves.
 

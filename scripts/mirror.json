@@ -3,7 +3,7 @@
   "files": {
     "index.html": {
       "source": "index.html",
-      "sha256": "d3ba280caa5835c1710898f158dfa5c5b556c7ef1ec77627d7dc44b587856785"
+      "sha256": "e7edab78b1f436267f9c2fb63358f1842dd2b578a5d5f2bab5d7ad40ced5b2a3"
     },
     "accountability-partner-habit-tracker/index.html": {
       "source": "accountability-partner-habit-tracker.html",
@@ -19,7 +19,7 @@
     },
     "habit-app-for-couples/index.html": {
       "source": "habit-app-for-couples.html",
-      "sha256": "f8ed49d019d79330e0c7acbae2101f07ee832130f368d15007913c7bf6a8318f"
+      "sha256": "482cd513283eac0d1642d79c3e1b917c47e54a8f7d23a41f7773a670df194407"
     },
     "daily-habit-tracker-with-reminders/index.html": {
       "source": "daily-habit-tracker-with-reminders.html",
@@ -35,7 +35,7 @@
     },
     "privacy-policy.html": {
       "source": "privacy-policy.html",
-      "sha256": "3f746dbf3461a091f0750b3a4397239391d0269a8530cfe9e6617d9471916fec"
+      "sha256": "8090309f356827b3ca405cb3e860f9acbc86440b77793497455028e461b77df8"
     },
     "terms-of-service.html": {
       "source": "terms-of-service.html",
