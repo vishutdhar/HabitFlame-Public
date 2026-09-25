@@ -64,7 +64,12 @@ RETIRED_POLICY_SENTENCES = (
     "the names of shared habits, completion events, milestones, streak counts, nudges, reactions, and your display name are relayed",
     "It never leaves your device and is never sent to any server",
     "An anonymous identity key that represents your account without revealing who you are",
+    "Health values stay on your device", "Session replay is turned on", "never individual habits",
 )
+# The support page answers the questions App Store reviewers and partners
+# arrive with, and gives the contact address as a link.
+SUPPORT_MUST = ("How do I add an accountability partner?", "I have an invite code. Where do I enter it?",
+                "How do I restore my purchase?", "Restore Purchases", f'href="mailto:{CONTACT}"')
 POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings",
                "weekly count", "Nudges and reactions", CONTACT)
 
@@ -154,8 +159,16 @@ for rel, (source, url) in MIRROR.items():
 
 # 5. The privacy page is the truthful policy.
 policy = pages.get("privacy-policy.html", "")
+policy = policy.split("<main", 1)[1] if "<main" in policy else ""
 for must in POLICY_MUST:
     check(must in policy, f"privacy-policy.html: missing {must!r}")
+
+# Visible markup only: the JSON-LD in the head repeats the questions, so a
+# page whose visible answers were gone would still match the raw source.
+support = re.sub(r"<script\b.*?</script>", "", pages.get("support.html", ""), flags=re.S)
+support = support.split("<main", 1)[1] if "<main" in support else ""
+for must in SUPPORT_MUST:
+    check(must in support, f"support.html: missing {must!r} from the visible page")
 
 # 6. Byte equality with the canonical copy, when asked.
 if args.source:
@@ -163,15 +176,29 @@ if args.source:
         src = args.source / source
         check(src.is_file() and rel in pages and src.read_bytes() == pages[rel].encode("utf-8"),
               f"{rel}: not byte equal to {src}")
+def fetch(url: str) -> "bytes | None":
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            return r.read()
+    except OSError as e:
+        failures.append(f"fetching {url} failed: {e}")
+        return None
+
+
 if args.live:
+    # Both published copies: the custom domain page and this repository's
+    # GitHub Pages address (the one App Store Connect links), plus the
+    # stylesheet and icon the pages load from the custom domain.
     for rel, (_source, url) in MIRROR.items():
-        try:
-            with urllib.request.urlopen(url, timeout=30) as r:
-                live = r.read()
-        except OSError as e:
-            failures.append(f"{rel}: fetching {url} failed: {e}")
-            continue
-        check(rel in pages and live == pages[rel].encode("utf-8"), f"{rel}: not byte equal to {url}")
+        mirror_url = f"{MIRROR_BASE}/{rel[:-len('index.html')] if rel.endswith('index.html') else rel}"
+        for where in (url, mirror_url):
+            live = fetch(where)
+            if live is not None:
+                check(rel in pages and live == pages[rel].encode("utf-8"), f"{rel}: not byte equal to {where}")
+    assets = sorted({v for text in pages.values() for tag, a in tags(text) if tag == "link"
+                     for v in [a.get("href", "")] if v.startswith(CANONICAL_BASE + "/") and a.get("rel") in ("stylesheet", "icon")})
+    for url in assets:
+        check(fetch(url) is not None, f"{url}: not served")
 
 # 7. No sitemap: a sitemap lists canonical URLs only, and those are the custom
 #    domain's, listed in its own sitemap. robots.txt stays, without one.
