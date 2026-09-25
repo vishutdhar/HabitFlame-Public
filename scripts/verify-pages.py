@@ -85,6 +85,7 @@ RETIRED_POLICY_SENTENCES = (
     "either automatically through your iCloud account or with a code",
     "and phone numbers are removed from event details", "Premium is bought per person",
     "purchase per person", "on the side of whoever buys it", "Real-time partner updates are bought by",
+    "monthly completion rates", "<p>When you remove a partner, the device records for that pairing",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -98,7 +99,8 @@ POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health"
                "eligible for deletion 30 days later", "Share usage analytics", "when the app is started in the evening",
                "automatically through your iCloud account", "request counters for each IP address, pairing and device",
                "for a reaction the name of the habit you reacted to", "keeps a record of the invite used for the move with no end date",
-               "Analytics never receives Health measurements", "the iOS keychain on this device only")
+               "Analytics never receives Health measurements", "the iOS keychain on this device only",
+               "Once the pairing service receives the request", "while you are online")
 
 failures: list[str] = []
 
