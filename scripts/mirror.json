@@ -7,7 +7,7 @@
     },
     "accountability-partner-habit-tracker/index.html": {
       "source": "accountability-partner-habit-tracker.html",
-      "sha256": "e6bff3fb8589bcb1d21c89b33153a44b44765884136103e1efaffca6af5f3466"
+      "sha256": "b56fb0e481940986b53a9db3653d336adaec1a286e99355982085d8acd2c4136"
     },
     "streak-tracker-app/index.html": {
       "source": "streak-tracker-app.html",
@@ -19,7 +19,7 @@
     },
     "habit-app-for-couples/index.html": {
       "source": "habit-app-for-couples.html",
-      "sha256": "482cd513283eac0d1642d79c3e1b917c47e54a8f7d23a41f7773a670df194407"
+      "sha256": "4d6c45ca3de8a4b021d16837276c0ed51342f4990ca75b1775a747c60af632ae"
     },
     "daily-habit-tracker-with-reminders/index.html": {
       "source": "daily-habit-tracker-with-reminders.html",
@@ -31,7 +31,7 @@
     },
     "support.html": {
       "source": "support.html",
-      "sha256": "633627b042460da0d73827feb5eb1d6be8422930b1616f7ca8fe31ed509d7da3"
+      "sha256": "65f62dd58c24d628ca4a454e3bfe0520e9db2503c150dd952c35f386093d2567"
     },
     "privacy-policy.html": {
       "source": "privacy-policy.html",

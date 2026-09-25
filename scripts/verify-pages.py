@@ -87,13 +87,15 @@ RETIRED_POLICY_SENTENCES = (
     "purchase per person", "on the side of whoever buys it", "Real-time partner updates are bought by",
     "monthly completion rates", "<p>When you remove a partner, the device records for that pairing",
     "the pairing service stores your display name, your device's push token",
+    "the two of you are paired. If they do not have the app yet, the link takes them",
+    "the link sends them to the App Store first",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
 SUPPORT_MUST = ("How do I add an accountability partner?", "I have an invite code. Where do I enter it?",
                 "How do I restore my purchase?", "Restore Purchases",
                 "Open the Partners tab and send an invite link", "choose Have a code and type the 6 character code",
-                "An invite expires after 7 days")
+                "An invite expires after 7 days", "the app shows your invite and they tap Accept")
 POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings",
                "weekly count", "Nudges and reactions", CONTACT,
                "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
@@ -104,7 +106,8 @@ POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health"
                "Once the pairing service receives the request", "while you are online",
                "Those recordings are deleted 30 days after they were made", "your IP address",
                "From version 4.5.3, you can turn analytics off", "Before it was turned off, PostHog could record sessions",
-               "An invite nobody accepts is deleted the next time the pairing service runs its cleanup")
+               "An invite nobody accepts is deleted the next time the pairing service runs its cleanup",
+               "These counters are not deleted")
 
 failures: list[str] = []
 
