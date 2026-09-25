@@ -79,6 +79,8 @@ RETIRED_POLICY_SENTENCES = (
     "nothing your partner can see beyond what you chose to share.",
     "Analytics receives only the type of a habit", "and its record is removed 30 days after it expires",
     "marked as removed, and deleted 30 days later",
+    "gets a different message each day", "it schedules a different message for each of the coming days",
+    "Deleting the app removes the data stored on your device. It does not",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -92,7 +94,7 @@ POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health"
                "eligible for deletion 30 days later", "Share usage analytics", "when the app is started in the evening",
                "automatically through your iCloud account", "request counters for each IP address, pairing and device",
                "for a reaction the name of the habit you reacted to", "For every invite, the pairing service also keeps a permanent record",
-               "Analytics never receives Health measurements")
+               "Analytics never receives Health measurements", "the iOS keychain on this device only")
 
 failures: list[str] = []
 
@@ -102,29 +104,41 @@ def check(cond: bool, msg: str) -> None:
         failures.append(msg)
 
 
+VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
 class MainText(HTMLParser):
     """Visible text and links inside <main>: comments are not text, and
-    script and style contents are skipped."""
+    script and style contents and elements marked hidden, aria-hidden or
+    display:none are skipped."""
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.depth, self.hidden, self.text, self.links = 0, 0, [], []
+        self.stack: list[tuple[str, bool]] = []  # (tag, hides its contents)
+        self.text, self.links = [], []
+
+    def in_main(self) -> bool:
+        return any(t == "main" for t, _ in self.stack)
+
+    def hidden(self) -> bool:
+        return any(h for _, h in self.stack)
 
     def handle_starttag(self, tag, attrs):
-        if tag == "main":
-            self.depth += 1
-        elif self.depth and tag in ("script", "style"):
-            self.hidden += 1
-        if self.depth and tag == "a":
-            self.links.append(dict(attrs).get("href", ""))
+        a = dict(attrs)
+        hides = (tag in ("script", "style") or "hidden" in a or a.get("aria-hidden") == "true"
+                 or "display:none" in (a.get("style") or "").replace(" ", ""))
+        if tag == "a" and self.in_main() and not self.hidden() and not hides:
+            self.links.append(a.get("href", ""))
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, hides))
 
     def handle_endtag(self, tag):
-        if tag == "main":
-            self.depth -= 1
-        elif self.depth and tag in ("script", "style"):
-            self.hidden -= 1
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
 
     def handle_data(self, data):
-        if self.depth and not self.hidden:
+        if self.in_main() and not self.hidden():
             self.text.append(data)
 
 

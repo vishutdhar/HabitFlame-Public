@@ -3,7 +3,7 @@
   "files": {
     "index.html": {
       "source": "index.html",
-      "sha256": "14e9578205f423b96815d8f4f81a3f0fd3e99faf34375eb0f91aa75577347808"
+      "sha256": "d3ba280caa5835c1710898f158dfa5c5b556c7ef1ec77627d7dc44b587856785"
     },
     "accountability-partner-habit-tracker/index.html": {
       "source": "accountability-partner-habit-tracker.html",
@@ -23,7 +23,7 @@
     },
     "daily-habit-tracker-with-reminders/index.html": {
       "source": "daily-habit-tracker-with-reminders.html",
-      "sha256": "bdc35e2b1206d181760f8e4a6cd648e5f46b21ef1e78cc26d8d4cd5ad3e7a34a"
+      "sha256": "050fb0248149a76912329a8286bab5eaf92a3a3f3a4aa6cb7eb4a4ee46b59e27"
     },
     "habitflame-vs-habitshare/index.html": {
       "source": "habitflame-vs-habitshare.html",
@@ -35,7 +35,7 @@
     },
     "privacy-policy.html": {
       "source": "privacy-policy.html",
-      "sha256": "464f4648511b65d48cbb2e9250097c2ecb5a1c1e5571614c106129c9f2d7bb46"
+      "sha256": "3dc14edc4255d0812d23472164b50faf5af278439904f12b8e8b238aae0a6472"
     },
     "terms-of-service.html": {
       "source": "terms-of-service.html",
