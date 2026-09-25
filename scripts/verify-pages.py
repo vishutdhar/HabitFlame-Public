@@ -75,6 +75,8 @@ RETIRED_POLICY_SENTENCES = (
     "A habit completed from a widget is not sent to your partner", "counts for your streak but is not sent",
     "so the message on Tuesday is not the message from Monday", "wording changes from day to day",
     "The wording varies from day to day", "keeps a small record of that code",
+    "never a habit name.", "Weekly and monthly charts", "so a habit set to weekdays does not ring on Saturday.",
+    "nothing your partner can see beyond what you chose to share.",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -86,7 +88,8 @@ POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health"
                "weekly count", "Nudges and reactions", CONTACT,
                "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
                "deleted 30 days later", "Share usage analytics", "when the app is started in the evening",
-               "automatically through your iCloud account", "a request counter for each IP address")
+               "automatically through your iCloud account", "request counters for each IP address, pairing and device",
+               "for a reaction the name of the habit you reacted to")
 
 failures: list[str] = []
 
