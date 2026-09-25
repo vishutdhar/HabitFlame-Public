@@ -30,6 +30,7 @@ import pathlib
 import re
 import sys
 import unicodedata
+import urllib.error
 import urllib.request
 from html.parser import HTMLParser
 
@@ -71,6 +72,9 @@ RETIRED_POLICY_SENTENCES = (
     "is invisible to your partner", "Anything not shared is invisible", "Habits you do not share are never sent",
     "every habit you share and complete is sent", "each of your shared completions instantly",
     "Every shared completion as it happens",
+    "A habit completed from a widget is not sent to your partner", "counts for your streak but is not sent",
+    "so the message on Tuesday is not the message from Monday", "wording changes from day to day",
+    "The wording varies from day to day", "keeps a small record of that code",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -81,7 +85,8 @@ SUPPORT_MUST = ("How do I add an accountability partner?", "I have an invite cod
 POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings",
                "weekly count", "Nudges and reactions", CONTACT,
                "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
-               "deleted 30 days later", "Share usage analytics", "when the app is started in the evening")
+               "deleted 30 days later", "Share usage analytics", "when the app is started in the evening",
+               "automatically through your iCloud account", "a request counter for each IP address")
 
 failures: list[str] = []
 
@@ -212,6 +217,17 @@ if args.live:
             live = fetch(where)
             if live is not None:
                 check(rel in pages and live == pages[rel].encode("utf-8"), f"{rel}: not byte equal to {where}")
+    # The files this repository keeps, and the sitemap it no longer serves.
+    for name, want in (("robots.txt", ROBOTS), (VERIFICATION_FILE, f"google-site-verification: {VERIFICATION_FILE}\n")):
+        body = fetch(f"{MIRROR_BASE}/{name}", "text/plain" if name.endswith(".txt") else "text/html")
+        check(body is None or body.decode("utf-8", "replace") == want, f"{MIRROR_BASE}/{name}: served content differs")
+    try:
+        with urllib.request.urlopen(f"{MIRROR_BASE}/sitemap.xml", timeout=30) as r:
+            failures.append(f"{MIRROR_BASE}/sitemap.xml: still served (status {r.status})")
+    except urllib.error.HTTPError as e:
+        check(e.code == 404, f"{MIRROR_BASE}/sitemap.xml: status {e.code}, want 404")
+    except OSError as e:
+        failures.append(f"fetching {MIRROR_BASE}/sitemap.xml failed: {e}")
     assets = sorted({v for text in pages.values() for tag, a in tags(text) if tag == "link"
                      for v in [a.get("href", "")] if v.startswith(CANONICAL_BASE + "/") and a.get("rel") in ("stylesheet", "icon")})
     for url in assets:
