@@ -68,11 +68,16 @@ RETIRED_POLICY_SENTENCES = (
     "There is currently no switch in the app to turn analytics off", "a random identifier for your installation",
     "one evening alert when a streak", "an evening streak-at-risk alert goes", "an evening warning when a streak",
     "once a day in the evening, a streak-at-risk alert",
+    "is invisible to your partner", "Anything not shared is invisible", "Habits you do not share are never sent",
+    "every habit you share and complete is sent", "each of your shared completions instantly",
+    "Every shared completion as it happens",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
 SUPPORT_MUST = ("How do I add an accountability partner?", "I have an invite code. Where do I enter it?",
-                "How do I restore my purchase?", "Restore Purchases", f'href="mailto:{CONTACT}"')
+                "How do I restore my purchase?", "Restore Purchases", f'href="mailto:{CONTACT}"',
+                "Open the Partners tab and send an invite link", "choose Have a code and type the 6 character code",
+                "An invite expires after 7 days")
 POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings",
                "weekly count", "Nudges and reactions", CONTACT,
                "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
@@ -212,8 +217,15 @@ if args.live:
     for url in assets:
         want = "text/css" if ".css" in url else "image/png"
         body = fetch(url, want)
-        if body is not None and want == "text/css":
-            check(b":root" in body and b".store" in body, f"{url}: served, but not the site stylesheet")
+        if body is None:
+            continue
+        if want == "image/png":
+            check(body.startswith(b"\x89PNG\r\n\x1a\n"), f"{url}: not a PNG image")
+        else:
+            # The page asks for site.css?v=<first 12 hex of its SHA-256>, so
+            # the served file must hash to exactly that version.
+            version = url.split("?v=", 1)[-1]
+            check(sha256(body)[:12] == version, f"{url}: served stylesheet hashes to {sha256(body)[:12]}, not {version}")
 
 # 7. No sitemap: a sitemap lists canonical URLs only, and those are the custom
 #    domain's, listed in its own sitemap. robots.txt stays, without one.

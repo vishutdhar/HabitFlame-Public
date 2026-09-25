@@ -3,15 +3,15 @@
   "files": {
     "index.html": {
       "source": "index.html",
-      "sha256": "138fbd1b8cb9a812047d593d434634ce0f1078c8c40eaa04a8029bdc055d6789"
+      "sha256": "b0994e1ea558c6aca7d45563a3d0b7e991791c815ba10d92653d59435e8072a4"
     },
     "accountability-partner-habit-tracker/index.html": {
       "source": "accountability-partner-habit-tracker.html",
-      "sha256": "f9a6ab42e2c43ef20407fdc46dabc751abc72fbfe9ca46f60958395282646d0d"
+      "sha256": "59631ef41c0730c241bb8255217a3826aa7a8cf1deb14584e9e8f2116885bf1d"
     },
     "streak-tracker-app/index.html": {
       "source": "streak-tracker-app.html",
-      "sha256": "3c2a46be6baf7f17a3d13e935657f8e556b284dda893273af5e017117095217b"
+      "sha256": "f34588cdd75c868f332c7aa6c8bb46727c298896ebae18c56d6d353b6578f043"
     },
     "pomodoro-habit-app/index.html": {
       "source": "pomodoro-habit-app.html",
@@ -19,15 +19,15 @@
     },
     "habit-app-for-couples/index.html": {
       "source": "habit-app-for-couples.html",
-      "sha256": "66fbb9729c51e054e8bbbedcf55548d12d3be0a26b2c8263fe9547480eef7427"
+      "sha256": "abec05f4819ab88dc3937b8be29b927a5c3a74192c1025c368447fd2ea6944f1"
     },
     "daily-habit-tracker-with-reminders/index.html": {
       "source": "daily-habit-tracker-with-reminders.html",
-      "sha256": "873de57788d493cbea8dfb2d897d0892ed054ae9958ae60bf3282db634028774"
+      "sha256": "9567401f4a0a3342accd0ebb0f99d8d5d9203c69eb1556fddf48ab243921d8b6"
     },
     "habitflame-vs-habitshare/index.html": {
       "source": "habitflame-vs-habitshare.html",
-      "sha256": "0796cae5d355a847a1a271d0bf4c0c33f18d5ff12b4ef94a67ab73b59f45f472"
+      "sha256": "eacc22ff48ecc04fbaaddc1e34b98fd51688201236a4cf9a652d59842f453782"
     },
     "support.html": {
       "source": "support.html",
@@ -35,7 +35,7 @@
     },
     "privacy-policy.html": {
       "source": "privacy-policy.html",
-      "sha256": "2d9aebae99a0633cf7827194360858573ab0991f50db610354a65a8836a5cac4"
+      "sha256": "1a597fc7f71eb3dbd357c5dc60f4153abced89a6eb6fe91483e04756efae2004"
     },
     "terms-of-service.html": {
       "source": "terms-of-service.html",
