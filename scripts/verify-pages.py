@@ -81,6 +81,8 @@ RETIRED_POLICY_SENTENCES = (
     "marked as removed, and deleted 30 days later",
     "gets a different message each day", "it schedules a different message for each of the coming days",
     "Deleting the app removes the data stored on your device. It does not",
+    "For every invite, the pairing service also keeps a permanent record",
+    "either automatically through your iCloud account or with a code",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -93,7 +95,7 @@ POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health"
                "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
                "eligible for deletion 30 days later", "Share usage analytics", "when the app is started in the evening",
                "automatically through your iCloud account", "request counters for each IP address, pairing and device",
-               "for a reaction the name of the habit you reacted to", "For every invite, the pairing service also keeps a permanent record",
+               "for a reaction the name of the habit you reacted to", "keeps a record of the invite used for the move with no end date",
                "Analytics never receives Health measurements", "the iOS keychain on this device only")
 
 failures: list[str] = []
@@ -109,7 +111,7 @@ VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
 
 class MainText(HTMLParser):
     """Visible text and links inside <main>: comments are not text, and
-    script and style contents and elements marked hidden, aria-hidden or
+    script, style, template and noscript contents and elements marked hidden, aria-hidden or
     display:none are skipped."""
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -124,7 +126,7 @@ class MainText(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        hides = (tag in ("script", "style") or "hidden" in a or a.get("aria-hidden") == "true"
+        hides = (tag in ("script", "style", "template", "noscript") or "hidden" in a or a.get("aria-hidden") == "true"
                  or "display:none" in (a.get("style") or "").replace(" ", ""))
         if tag == "a" and self.in_main() and not self.hidden() and not hides:
             self.links.append(a.get("href", ""))
