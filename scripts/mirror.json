@@ -3,15 +3,15 @@
   "files": {
     "index.html": {
       "source": "index.html",
-      "sha256": "be9359d918091e64a6a05d5f57eede754e8e583cbba32e88fcb74aebe95a5613"
+      "sha256": "138fbd1b8cb9a812047d593d434634ce0f1078c8c40eaa04a8029bdc055d6789"
     },
     "accountability-partner-habit-tracker/index.html": {
       "source": "accountability-partner-habit-tracker.html",
-      "sha256": "ce36331a773f6ee8427871a4902e26a7554a2e8e11b64bdfbcd2f015bf21a280"
+      "sha256": "f9a6ab42e2c43ef20407fdc46dabc751abc72fbfe9ca46f60958395282646d0d"
     },
     "streak-tracker-app/index.html": {
       "source": "streak-tracker-app.html",
-      "sha256": "079c7632271ff5db198dffbc5e372c67f1174e4b3bd4820c8dc583f2f1fd3026"
+      "sha256": "3c2a46be6baf7f17a3d13e935657f8e556b284dda893273af5e017117095217b"
     },
     "pomodoro-habit-app/index.html": {
       "source": "pomodoro-habit-app.html",
@@ -23,7 +23,7 @@
     },
     "daily-habit-tracker-with-reminders/index.html": {
       "source": "daily-habit-tracker-with-reminders.html",
-      "sha256": "54fd5bf02c2e4b6f632982e4a90788d6b06b72598634311994006b4b22869eb9"
+      "sha256": "873de57788d493cbea8dfb2d897d0892ed054ae9958ae60bf3282db634028774"
     },
     "habitflame-vs-habitshare/index.html": {
       "source": "habitflame-vs-habitshare.html",
@@ -35,7 +35,7 @@
     },
     "privacy-policy.html": {
       "source": "privacy-policy.html",
-      "sha256": "61490e781960dd2719d43eb26fd626a857ef3d99229dd622d51f2eb63d961890"
+      "sha256": "2d9aebae99a0633cf7827194360858573ab0991f50db610354a65a8836a5cac4"
     },
     "terms-of-service.html": {
       "source": "terms-of-service.html",

@@ -65,13 +65,18 @@ RETIRED_POLICY_SENTENCES = (
     "It never leaves your device and is never sent to any server",
     "An anonymous identity key that represents your account without revealing who you are",
     "Health values stay on your device", "Session replay is turned on", "never individual habits",
+    "There is currently no switch in the app to turn analytics off", "a random identifier for your installation",
+    "one evening alert when a streak", "an evening streak-at-risk alert goes", "an evening warning when a streak",
+    "once a day in the evening, a streak-at-risk alert",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
 SUPPORT_MUST = ("How do I add an accountability partner?", "I have an invite code. Where do I enter it?",
                 "How do I restore my purchase?", "Restore Purchases", f'href="mailto:{CONTACT}"')
 POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings",
-               "weekly count", "Nudges and reactions", CONTACT)
+               "weekly count", "Nudges and reactions", CONTACT,
+               "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
+               "deleted 30 days later", "Share usage analytics", "when the app is started in the evening")
 
 failures: list[str] = []
 
@@ -176,10 +181,17 @@ if args.source:
         src = args.source / source
         check(src.is_file() and rel in pages and src.read_bytes() == pages[rel].encode("utf-8"),
               f"{rel}: not byte equal to {src}")
-def fetch(url: str) -> "bytes | None":
+def fetch(url: str, want_type: str = "text/html") -> "bytes | None":
+    """The body of a 200 response whose content type is want_type, else None
+    with a failure recorded: an error page served as HTML is not the asset."""
     try:
         with urllib.request.urlopen(url, timeout=30) as r:
-            return r.read()
+            ctype = r.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            body = r.read()
+            if r.status != 200 or ctype != want_type:
+                failures.append(f"{url}: status {r.status}, content type {ctype!r}, want 200 and {want_type!r}")
+                return None
+            return body
     except OSError as e:
         failures.append(f"fetching {url} failed: {e}")
         return None
@@ -198,7 +210,10 @@ if args.live:
     assets = sorted({v for text in pages.values() for tag, a in tags(text) if tag == "link"
                      for v in [a.get("href", "")] if v.startswith(CANONICAL_BASE + "/") and a.get("rel") in ("stylesheet", "icon")})
     for url in assets:
-        check(fetch(url) is not None, f"{url}: not served")
+        want = "text/css" if ".css" in url else "image/png"
+        body = fetch(url, want)
+        if body is not None and want == "text/css":
+            check(b":root" in body and b".store" in body, f"{url}: served, but not the site stylesheet")
 
 # 7. No sitemap: a sitemap lists canonical URLs only, and those are the custom
 #    domain's, listed in its own sitemap. robots.txt stays, without one.
