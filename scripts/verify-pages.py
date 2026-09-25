@@ -77,19 +77,22 @@ RETIRED_POLICY_SENTENCES = (
     "The wording varies from day to day", "keeps a small record of that code",
     "never a habit name.", "Weekly and monthly charts", "so a habit set to weekdays does not ring on Saturday.",
     "nothing your partner can see beyond what you chose to share.",
+    "Analytics receives only the type of a habit", "and its record is removed 30 days after it expires",
+    "marked as removed, and deleted 30 days later",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
 SUPPORT_MUST = ("How do I add an accountability partner?", "I have an invite code. Where do I enter it?",
-                "How do I restore my purchase?", "Restore Purchases", f'href="mailto:{CONTACT}"',
+                "How do I restore my purchase?", "Restore Purchases",
                 "Open the Partners tab and send an invite link", "choose Have a code and type the 6 character code",
                 "An invite expires after 7 days")
 POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings",
                "weekly count", "Nudges and reactions", CONTACT,
                "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
-               "deleted 30 days later", "Share usage analytics", "when the app is started in the evening",
+               "eligible for deletion 30 days later", "Share usage analytics", "when the app is started in the evening",
                "automatically through your iCloud account", "request counters for each IP address, pairing and device",
-               "for a reaction the name of the habit you reacted to")
+               "for a reaction the name of the habit you reacted to", "For every invite, the pairing service also keeps a permanent record",
+               "Analytics never receives Health measurements")
 
 failures: list[str] = []
 
@@ -97,6 +100,39 @@ failures: list[str] = []
 def check(cond: bool, msg: str) -> None:
     if not cond:
         failures.append(msg)
+
+
+class MainText(HTMLParser):
+    """Visible text and links inside <main>: comments are not text, and
+    script and style contents are skipped."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth, self.hidden, self.text, self.links = 0, 0, [], []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "main":
+            self.depth += 1
+        elif self.depth and tag in ("script", "style"):
+            self.hidden += 1
+        if self.depth and tag == "a":
+            self.links.append(dict(attrs).get("href", ""))
+
+    def handle_endtag(self, tag):
+        if tag == "main":
+            self.depth -= 1
+        elif self.depth and tag in ("script", "style"):
+            self.hidden -= 1
+
+    def handle_data(self, data):
+        if self.depth and not self.hidden:
+            self.text.append(data)
+
+
+def visible_main(text: str) -> tuple[str, list]:
+    p = MainText()
+    p.feed(text)
+    p.close()
+    return unicodedata.normalize("NFKC", re.sub(r"\s+", " ", " ".join(p.text))), p.links
 
 
 class Tags(HTMLParser):
@@ -176,15 +212,15 @@ for rel, (source, url) in MIRROR.items():
         check(stale.lower() not in body, f"{rel}: still says {stale!r}")
 
 # 5. The privacy page is the truthful policy.
-policy = pages.get("privacy-policy.html", "")
-policy = policy.split("<main", 1)[1] if "<main" in policy else ""
+policy, policy_links = visible_main(pages.get("privacy-policy.html", ""))
+check(f"mailto:{CONTACT}" in policy_links, "privacy-policy.html: no visible mailto link to the contact address")
 for must in POLICY_MUST:
     check(must in policy, f"privacy-policy.html: missing {must!r}")
 
-# Visible markup only: the JSON-LD in the head repeats the questions, so a
-# page whose visible answers were gone would still match the raw source.
-support = re.sub(r"<script\b.*?</script>", "", pages.get("support.html", ""), flags=re.S)
-support = support.split("<main", 1)[1] if "<main" in support else ""
+# Parsed visible text only: the JSON-LD in the head repeats the questions,
+# and commented out markup is not on the page.
+support, support_links = visible_main(pages.get("support.html", ""))
+check(f"mailto:{CONTACT}" in support_links, "support.html: no visible mailto link to the contact address")
 for must in SUPPORT_MUST:
     check(must in support, f"support.html: missing {must!r} from the visible page")
 
