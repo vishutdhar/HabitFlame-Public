@@ -89,6 +89,7 @@ RETIRED_POLICY_SENTENCES = (
     "the pairing service stores your display name, your device's push token",
     "the two of you are paired. If they do not have the app yet, the link takes them",
     "the link sends them to the App Store first",
+    "your best day for each habit",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
