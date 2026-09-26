@@ -970,11 +970,12 @@ for u in locs:
 POLICY = (ROOT / "privacy-policy.html").read_text(encoding="utf-8")
 for must in ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings", "weekly count", "Nudges and reactions",
              "turn analytics off in Settings", "does not record your screen", "Tapped-element details are not collected",
-             SITE["contact_email"]):
+             "Last updated: September 26, 2026", SITE["contact_email"]):
     check(must in POLICY, f"privacy-policy.html: missing {must!r}")
 for stale in ("We do not collect any personal information", "do not use analytics", "do not have servers",
               "does not integrate with any third-party analytics", "There is currently no switch",
-              "Session replay is turned on"):
+              "Session replay is turned on", "PostHog can record your sessions in the app as a series of screen images",
+              "Text fields are masked, but other text on the screen", "Last updated: September 24, 2026"):
     check(stale.lower() not in POLICY.lower(), f"privacy-policy.html: still says {stale!r}")
 push = re.search(r"<h2>Push notifications</h2>(.*?)<h2>", POLICY, re.S)
 check(bool(push) and "have Premium and complete" in norm(re.sub(r"\s+", " ", push.group(1) if push else "")),
