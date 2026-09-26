@@ -20,7 +20,7 @@
 </head>
 <body>
     <h1>Privacy Policy</h1>
-    <p class="last-updated">Last updated: September 24, 2026</p>
+    <p class="last-updated">Last updated: September 26, 2026</p>
 
     <h2>Introduction</h2>
     <p>HabitFlame ("we", "our" or "us") is a habit tracker for iPhone and iPad. This policy explains what the app stores, what it sends, who receives it and how you can remove it. HabitFlame does not ask you to create an account.</p>
@@ -50,10 +50,11 @@
         <li>your IP address, which PostHog uses to estimate your approximate location</li>
         <li>crash and hang diagnostics, such as durations and technical fingerprints</li>
     </ul>
-    <p>Habit names, partner names, display names, email addresses and phone numbers are removed from event details before they are sent. There is currently no switch in the app to turn analytics off.</p>
+    <p>Habit names, partner names, display names, email addresses and phone numbers are removed from event details before they are sent. Tapped-element details are not collected.</p>
+    <p>You can turn analytics off in Settings, under Privacy. The app then stops sending analytics, stops loading remote settings, and deletes the analytics data queued on your device. Requests already in progress at that moment complete.</p>
 
     <h2>Screen recordings</h2>
-    <p>Session replay is turned on. PostHog can record your sessions in the app as a series of screen images. Text fields are masked, but other text on the screen, including your habit names, can appear in these recordings. Recordings are kept for 30 days.</p>
+    <p>The app does not record your screen. Versions before 4.5.3 could record screen sessions as image snapshots for diagnostics; recording was switched off for every version on 25 September 2026, existing recordings are deleted after 30 days, and the first launch of 4.5.3 deletes any recording still waiting on your device.</p>
 
     <h2>Apple Health</h2>
     <p>If you give permission, the app reads step count, active energy, exercise minutes, water intake, body mass, mindful minutes and workouts from Apple Health, so it can complete habits for you automatically. It does not write anything to Apple Health. Health values stay on your device. They are never sent to partners, to the pairing service or to analytics. Analytics receives only the type of a habit.</p>
