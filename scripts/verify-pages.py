@@ -92,6 +92,7 @@ RETIRED_POLICY_SENTENCES = (
     "your best day for each habit",
     "resets to zero and starts again with your next completion",
     "an evening streak-at-risk alert goes to your partner",
+    "when a streak milestone is crossed", "an iPhone and iPad app only",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
