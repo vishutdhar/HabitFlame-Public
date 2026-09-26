@@ -90,6 +90,8 @@ RETIRED_POLICY_SENTENCES = (
     "the two of you are paired. If they do not have the app yet, the link takes them",
     "the link sends them to the App Store first",
     "your best day for each habit",
+    "resets to zero and starts again with your next completion",
+    "an evening streak-at-risk alert goes to your partner",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -270,6 +272,10 @@ def fetch(url: str, want_type: str = "text/html") -> "bytes | None":
         with urllib.request.urlopen(url, timeout=30) as r:
             ctype = r.headers.get("Content-Type", "").split(";")[0].strip().lower()
             body = r.read()
+            # A redirect to the other host would compare a page with itself.
+            if r.geturl() != url:
+                failures.append(f"{url}: redirected to {r.geturl()}")
+                return None
             if r.status != 200 or ctype != want_type:
                 failures.append(f"{url}: status {r.status}, content type {ctype!r}, want 200 and {want_type!r}")
                 return None
