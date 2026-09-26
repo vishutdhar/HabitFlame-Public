@@ -1,0 +1,45 @@
+{
+  "canonical_base": "https://habitflame.vishutdhar.com",
+  "files": {
+    "index.html": {
+      "source": "index.html",
+      "sha256": "a7e7c4be895a0b8a47525b06d780803ab21230c87c7fb9f11fc4c7b8208755db"
+    },
+    "accountability-partner-habit-tracker/index.html": {
+      "source": "accountability-partner-habit-tracker.html",
+      "sha256": "f2e243af7c15c122f1bc3311ceb00bb2d4bec14532f8f8cac8b406dc752c2148"
+    },
+    "streak-tracker-app/index.html": {
+      "source": "streak-tracker-app.html",
+      "sha256": "46c5fdcf2f0e1ef8150b67dd0446c804c8bf8f5a87c4b13246aa17308fdcdba7"
+    },
+    "pomodoro-habit-app/index.html": {
+      "source": "pomodoro-habit-app.html",
+      "sha256": "6a489d8ceaf97f8fd1131d98bd9dff730d8a264e6599783c688b1159c214b683"
+    },
+    "habit-app-for-couples/index.html": {
+      "source": "habit-app-for-couples.html",
+      "sha256": "4d6c45ca3de8a4b021d16837276c0ed51342f4990ca75b1775a747c60af632ae"
+    },
+    "daily-habit-tracker-with-reminders/index.html": {
+      "source": "daily-habit-tracker-with-reminders.html",
+      "sha256": "0b2fc6e41dd11d66046f352875b09d627d26fd4bdf3c174aac00dfbaf94fdbfe"
+    },
+    "habitflame-vs-habitshare/index.html": {
+      "source": "habitflame-vs-habitshare.html",
+      "sha256": "a97932ed95e3dc14980a8a122bedd4c567b17f226cf7e9fc4204c093ddf31e51"
+    },
+    "support.html": {
+      "source": "support.html",
+      "sha256": "65f62dd58c24d628ca4a454e3bfe0520e9db2503c150dd952c35f386093d2567"
+    },
+    "privacy-policy.html": {
+      "source": "privacy-policy.html",
+      "sha256": "185b1c60b75ffa708181d4eda19aaaf571c931a34906f6060b92fc9f9c9cc5e6"
+    },
+    "terms-of-service.html": {
+      "source": "terms-of-service.html",
+      "sha256": "4317b6a6c185bcaa864c9526ef770e4e8d3f243ae393875a79b947d5bb6c65e2"
+    }
+  }
+}

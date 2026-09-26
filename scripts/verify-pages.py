@@ -1,53 +1,119 @@
 #!/usr/bin/env python3
-"""Read-only checks over the generated HabitFlame site. Prints every failure
-and exits 1 if there is any.
+"""Read-only checks over the GitHub Pages mirror of the HabitFlame site.
+Prints every failure and exits 1 if there is any.
 
-  python3 scripts/verify-pages.py
+  python3 scripts/verify-pages.py                  checks this repository
+  python3 scripts/verify-pages.py --source DIR     also compares every page
+                                                   byte for byte with a
+                                                   habitflame-web checkout
+  python3 scripts/verify-pages.py --live           also compares every page
+                                                   with the live custom domain
 
-Checks: committed output equals a fresh render, deployment facts, numbers and
-Premium claims agree with the facts in pages.json, banned and negated phrases,
-the competitor rule, links, metadata, word counts, prose hygiene, the sitemap
-and stale page directories.
+The canonical HabitFlame site is https://habitflame.vishutdhar.com, built from
+the habitflame-web repository. This repository only keeps the old GitHub Pages
+addresses working (App Store Connect still links its support and privacy
+pages): every page here is a byte for byte copy of the custom domain page,
+whose canonical link and og:url already point at the custom domain, so search
+engines fold the two copies into one.
+
+Checks: the mirror map, the manifest hashes, canonical and og:url on the
+custom domain, links that never point back at GitHub Pages, no sitemap, the
+robots file, the Search Console verification file, the truthful privacy
+policy, retired false sentences, stale files and prose hygiene.
 """
+import argparse
 import codecs
-import datetime
+import hashlib
 import html as htmlmod
 import json
 import pathlib
 import re
-import subprocess
 import sys
-import types
 import unicodedata
+import urllib.error
+import urllib.request
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-GEN_PATH = ROOT / "scripts" / "build-pages.py"
+CANONICAL_BASE = "https://habitflame.vishutdhar.com"
+MIRROR_BASE = "https://vishutdhar.github.io/HabitFlame-Public"
+VERIFICATION_FILE = "googled95610149d8bb2dd.html"
+ROBOTS = "User-agent: *\nAllow: /\n"
+CONTACT = "support@freedom-terminal.com"
 
-# Execute the generator's source directly rather than importing it: an import
-# goes through the bytecode cache, keyed by mtime at one second resolution, so
-# an edit made within a second of the last run would verify stale code.
-gen = types.ModuleType("gen")
-gen.__file__ = str(GEN_PATH)
-exec(compile(GEN_PATH.read_text(encoding="utf-8"), gen.__file__, "exec"), gen.__dict__)
+# Mirror path here -> (file in habitflame-web, canonical URL). Pinned so the
+# old GitHub Pages addresses cannot silently disappear.
+MIRROR = {
+    "index.html": ("index.html", f"{CANONICAL_BASE}/"),
+    "accountability-partner-habit-tracker/index.html": ("accountability-partner-habit-tracker.html", f"{CANONICAL_BASE}/accountability-partner-habit-tracker"),
+    "streak-tracker-app/index.html": ("streak-tracker-app.html", f"{CANONICAL_BASE}/streak-tracker-app"),
+    "pomodoro-habit-app/index.html": ("pomodoro-habit-app.html", f"{CANONICAL_BASE}/pomodoro-habit-app"),
+    "habit-app-for-couples/index.html": ("habit-app-for-couples.html", f"{CANONICAL_BASE}/habit-app-for-couples"),
+    "daily-habit-tracker-with-reminders/index.html": ("daily-habit-tracker-with-reminders.html", f"{CANONICAL_BASE}/daily-habit-tracker-with-reminders"),
+    "habitflame-vs-habitshare/index.html": ("habitflame-vs-habitshare.html", f"{CANONICAL_BASE}/habitflame-vs-habitshare"),
+    "support.html": ("support.html", f"{CANONICAL_BASE}/support"),
+    "privacy-policy.html": ("privacy-policy.html", f"{CANONICAL_BASE}/privacy-policy"),
+    "terms-of-service.html": ("terms-of-service.html", f"{CANONICAL_BASE}/terms-of-service"),
+}
+MANIFEST = ROOT / "scripts" / "mirror.json"
 
-SITE, FACTS, LANDING, PAGES, BASE = gen.SITE, gen.FACTS, gen.LANDING, gen.PAGES, gen.BASE
-
-# Deployment facts, pinned here so a typo in pages.json cannot move the site,
-# the store link or the product name without this file changing too.
-PINNED_BASE_URL = "https://vishutdhar.github.io/HabitFlame-Public"
-PINNED_APP_STORE_URL = "https://apps.apple.com/us/app/habit-flame-streak-tracker/id6756961710"
-PINNED_NAME = "HabitFlame"
-BRAND_URL = "https://freedom-terminal.com/"
-BRAND_TEXT = "A Freedom Terminal product"
-# Numbers allowed in copy that are not a fact value: the footer year and the
-# small counts the copy uses in prose (2 sessions, 3 times a week, a set of 4).
-EXTRA_ALLOWED_NUMBERS = {"2026", "2", "3", "4"}
-GUIDE_TABLE_HEAD = ["", "Free", "Premium"]
+# Sentences from the retired policies, false about what the app does. Kept in
+# step with the list in habitflame-web's verifier.
+RETIRED_POLICY_SENTENCES = (
+    "We do not collect any personal information", "do not use analytics", "do not have servers",
+    "does not integrate with any third-party analytics",
+    "the names of shared habits, completion events, milestones, streak counts, nudges, reactions, and your display name are relayed",
+    "It never leaves your device and is never sent to any server",
+    "An anonymous identity key that represents your account without revealing who you are",
+    "Health values stay on your device", "Session replay is turned on", "never individual habits",
+    "There is currently no switch in the app to turn analytics off", "a random identifier for your installation",
+    "one evening alert when a streak", "an evening streak-at-risk alert goes", "an evening warning when a streak",
+    "once a day in the evening, a streak-at-risk alert",
+    "is invisible to your partner", "Anything not shared is invisible", "Habits you do not share are never sent",
+    "every habit you share and complete is sent", "each of your shared completions instantly",
+    "Every shared completion as it happens",
+    "A habit completed from a widget is not sent to your partner", "counts for your streak but is not sent",
+    "so the message on Tuesday is not the message from Monday", "wording changes from day to day",
+    "The wording varies from day to day", "keeps a small record of that code",
+    "never a habit name.", "Weekly and monthly charts", "so a habit set to weekdays does not ring on Saturday.",
+    "nothing your partner can see beyond what you chose to share.",
+    "Analytics receives only the type of a habit", "and its record is removed 30 days after it expires",
+    "marked as removed, and deleted 30 days later",
+    "gets a different message each day", "it schedules a different message for each of the coming days",
+    "Deleting the app removes the data stored on your device. It does not",
+    "For every invite, the pairing service also keeps a permanent record",
+    "either automatically through your iCloud account or with a code",
+    "and phone numbers are removed from event details", "Premium is bought per person",
+    "purchase per person", "on the side of whoever buys it", "Real-time partner updates are bought by",
+    "monthly completion rates", "<p>When you remove a partner, the device records for that pairing",
+    "the pairing service stores your display name, your device's push token",
+    "the two of you are paired. If they do not have the app yet, the link takes them",
+    "the link sends them to the App Store first",
+    "your best day for each habit",
+    "resets to zero and starts again with your next completion",
+    "an evening streak-at-risk alert goes to your partner",
+    "when a streak milestone is crossed", "an iPhone and iPad app only",
+)
+# The support page answers the questions App Store reviewers and partners
+# arrive with, and gives the contact address as a link.
+SUPPORT_MUST = ("How do I add an accountability partner?", "I have an invite code. Where do I enter it?",
+                "How do I restore my purchase?", "Restore Purchases",
+                "Open the Partners tab and send an invite link", "choose Have a code and type the 6 character code",
+                "An invite expires after 7 days", "the app shows your invite and they tap Accept")
+POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings",
+               "weekly count", "Nudges and reactions", CONTACT,
+               "Session replay is turned off", "in your private iCloud database", "one-way hash of the habit's identifier",
+               "eligible for deletion 30 days later", "Share usage analytics", "when the app is started in the evening",
+               "automatically through your iCloud account", "request counters for each IP address, pairing and device",
+               "for a reaction the name of the habit you reacted to", "keeps a record of the invite used for the move with no end date",
+               "Analytics never receives Health measurements", "the iOS keychain on this device only",
+               "Once the pairing service receives the request", "while you are online",
+               "Those recordings are deleted 30 days after they were made", "your IP address",
+               "From version 4.5.3, you can turn analytics off", "Before it was turned off, PostHog could record sessions",
+               "An invite nobody accepts is deleted the next time the pairing service runs its cleanup",
+               "These counters are not deleted")
 
 failures: list[str] = []
-notes: list[str] = []
 
 
 def check(cond: bool, msg: str) -> None:
@@ -55,971 +121,250 @@ def check(cond: bool, msg: str) -> None:
         failures.append(msg)
 
 
-# ---- A small DOM, enough to pull visible text out of our own markup ---------
-
-VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
-INLINE = {"a", "b", "strong", "em", "i", "span", "small", "abbr", "code"}
-HIDDEN = {"script", "style", "head", "title", "template", "noscript"}
+VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
-class Node:
-    def __init__(self, tag: str, attrs: dict, parent: "Node | None"):
-        self.tag, self.attrs, self.parent, self.children = tag, attrs, parent, []
-
-    @property
-    def classes(self) -> set[str]:
-        return set((self.attrs.get("class") or "").split())
-
-    def walk(self):
-        yield self
-        for c in self.children:
-            if isinstance(c, Node):
-                yield from c.walk()
-
-    def find_all(self, pred):
-        return [n for n in self.walk() if pred(n)]
-
-    def ancestors(self):
-        n = self.parent
-        while n is not None:
-            yield n
-            n = n.parent
-
-    def text(self, skip=lambda n: False) -> str:
-        """Visible text; block boundaries become spaces, inline tags do not."""
-        out: list[str] = []
-
-        def rec(node: Node) -> None:
-            for c in node.children:
-                if isinstance(c, str):
-                    out.append(c)
-                elif c.tag in HIDDEN or skip(c):
-                    continue
-                else:
-                    sep = "" if c.tag in INLINE else " "
-                    out.append(sep)
-                    rec(c)
-                    out.append(sep)
-
-        rec(self)
-        return re.sub(r"\s+", " ", "".join(out)).strip()
-
-
-class Builder(HTMLParser):
+class MainText(HTMLParser):
+    """Visible text and links inside <main>: comments are not text, and
+    script, style, template and noscript contents and elements marked hidden, aria-hidden or
+    display:none are skipped."""
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.root = Node("#root", {}, None)
-        self.cur = self.root
+        self.stack: list[tuple[str, bool]] = []  # (tag, hides its contents)
+        self.text, self.links = [], []
+
+    def in_main(self) -> bool:
+        return any(t == "main" for t, _ in self.stack)
+
+    def hidden(self) -> bool:
+        return any(h for _, h in self.stack)
 
     def handle_starttag(self, tag, attrs):
-        node = Node(tag, dict(attrs), self.cur)
-        self.cur.children.append(node)
-        if tag not in VOID:
-            self.cur = node
-
-    def handle_startendtag(self, tag, attrs):
-        self.cur.children.append(Node(tag, dict(attrs), self.cur))
+        a = dict(attrs)
+        hides = (tag in ("script", "style", "template", "noscript") or "hidden" in a or a.get("aria-hidden") == "true"
+                 or "display:none" in (a.get("style") or "").replace(" ", ""))
+        if tag == "a" and self.in_main() and not self.hidden() and not hides:
+            self.links.append(a.get("href", ""))
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, hides))
 
     def handle_endtag(self, tag):
-        if tag in VOID:
-            return
-        n = self.cur
-        while n is not None and n.tag != tag:
-            n = n.parent
-        if n is None:
-            failures.append(f"unmatched </{tag}>")
-            return
-        self.cur = n.parent
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
 
     def handle_data(self, data):
-        self.cur.children.append(data)
+        if self.in_main() and not self.hidden():
+            self.text.append(data)
 
 
-def parse(text: str) -> Node:
-    b = Builder()
-    b.feed(text)
-    b.close()
-    return b.root
+def visible_main(text: str) -> tuple[str, list]:
+    p = MainText()
+    p.feed(text)
+    p.close()
+    return unicodedata.normalize("NFKC", re.sub(r"\s+", " ", " ".join(p.text))), p.links
 
 
-def by_tag(root: Node, tag: str) -> list[Node]:
-    return root.find_all(lambda n: n.tag == tag)
+class Tags(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tags: list[tuple[str, dict]] = []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
+
+    handle_startendtag = handle_starttag
 
 
-def first(root: Node, pred) -> "Node | None":
-    found = root.find_all(pred)
-    return found[0] if found else None
+def tags(text: str) -> list[tuple[str, dict]]:
+    p = Tags()
+    p.feed(text)
+    p.close()
+    return p.tags
 
 
-def meta(root: Node, key: str, value: str) -> "str | None":
-    n = first(root, lambda n: n.tag == "meta" and n.attrs.get(key) == value)
-    return None if n is None else n.attrs.get("content")
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def whole(phrase: str) -> re.Pattern:
-    return re.compile(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", re.I)
+def flat(text: str) -> str:
+    return unicodedata.normalize("NFKC", re.sub(r"\s+", " ", htmlmod.unescape(text))).lower()
 
 
-def whole_or_plural(phrase: str) -> re.Pattern:
-    """The phrase as a whole word or phrase, also with a trailing s or es."""
-    return re.compile(r"(?<!\w)" + re.escape(phrase) + r"(?:es|s)?(?!\w)", re.I)
+parser = argparse.ArgumentParser()
+parser.add_argument("--source", type=pathlib.Path, help="a habitflame-web checkout to compare with")
+parser.add_argument("--live", action="store_true", help="compare with the live custom domain")
+args = parser.parse_args()
 
-
-# A sentence ends at . ! or ? followed by an optional closing quote or bracket
-# and whitespace, so a closing quotation mark never glues two sentences.
-# Text is normalised before any phrase check: NFKC, curly quotes and
-# apostrophes to straight ones, hyphen variants to "-".
-NORM_MAP = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
-                          "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
-                          "\u2010": "-", "\u2011": "-", "\u00ad": "-", "\u2212": "-"})
-
-
-def norm(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).translate(NORM_MAP)
-
-
-# A sentence ends at . ! or ? plus any run of closing quotes or brackets
-# (straight or curly, single or double), then whitespace.
-SENTENCE_END = re.compile(r"[.!?][\"'\u2018\u2019\u201c\u201d)\]]*\s+")
-
-
-def sentences(text: str) -> list[str]:
-    text = norm(text)
-    out, pos = [], 0
-    for m in SENTENCE_END.finditer(text):
-        out.append(text[pos:m.end()].strip())
-        pos = m.end()
-    out.append(text[pos:].strip())
-    return [s for s in out if s]
-
-
-def words_with_spans(text: str) -> list[tuple[str, int, int]]:
-    return [(m.group(0).lower(), m.start(), m.end()) for m in re.finditer(r"[A-Za-z0-9$']+(?:\.[0-9]+)?", text)]
-
-
-def table_head(table: Node) -> list[str]:
-    thead = first(table, lambda n: n.tag == "thead")
-    return [th.text() for th in by_tag(thead, "th")] if thead else []
-
-
-def row_cells(tr: Node) -> list[Node]:
-    return [c for c in tr.children if isinstance(c, Node) and c.tag in {"th", "td"}]
-
-
-# ---- 4. Deployment facts ----------------------------------------------------
-
-check(SITE["base_url"] == PINNED_BASE_URL, f"site.base_url is {SITE['base_url']!r}, pinned {PINNED_BASE_URL!r}")
-check(BASE == PINNED_BASE_URL, f"generator base is {BASE!r}, pinned {PINNED_BASE_URL!r}")
-check(SITE["app_store_url"] == PINNED_APP_STORE_URL, f"site.app_store_url is {SITE['app_store_url']!r}, pinned {PINNED_APP_STORE_URL!r}")
-check(SITE["name"] == PINNED_NAME, f"site.name is {SITE['name']!r}, pinned {PINNED_NAME!r}")
-
-# ---- 9. Minimum lists pages.json may extend but never shrink ----------------
-
-REQUIRED_BANNED = {
-    "google play", "web app", "browser version", "mac app", "apple watch", "watch app",
-    "custom app icon", "duo quest", "weekly quest", "quest", "free trial",
-    "thousands of", "millions", "million", "guarantee", "guaranteed", "proven to", "clinically", "scientifically",
-    "#1", "number one", "best habit app", "world's best",
-    "ai-powered", "ai powered", "artificial intelligence", "machine learning",
-    "unlimited free", "free forever", "lifetime free",
-    "shared streak", "joint streak", "couple streak", "team streak",
-    "chat", "messaging", "video call", "leaderboard", "challenge",
-    "no analytics", "no tracking", "no servers", "never leaves your device", "not accessible by",
-    "receives only a weekly count",
-}
-REQUIRED_PREMIUM_ONLY = {
-    "unlimited habits", "habit stacking", "smart insights", "real-time partner updates",
-    "instant partner notifications", "unlimited partner nudges", "unlimited nudges", "stack habits", "stacking",
-}
-REQUIRED_NEGATED_ONLY = {"subscription", "android", "web version", "trial"}
-for key, required in [("banned_phrases", REQUIRED_BANNED), ("premium_only", REQUIRED_PREMIUM_ONLY), ("negated_only", REQUIRED_NEGATED_ONLY)]:
-    missing = required - {x.lower() for x in FACTS.get(key, [])}
-    check(not missing, f"facts.{key} dropped required entries {sorted(missing)}")
-
-# ---- 3. The one date --------------------------------------------------------
-
-def iso_date(value) -> bool:
-    """Exactly YYYY-MM-DD and a real date. fromisoformat alone also accepts
-    forms such as 20260924 and 2026-W39-4."""
-    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-        return False
-    try:
-        datetime.date.fromisoformat(value)
-        return True
-    except ValueError:
-        return False
-
-
-POLICY_NAMES = ["support.html", "privacy-policy.html", "terms-of-service.html"]
-DATES = {"landing": LANDING.get("lastmod")}
-DATES.update({p["slug"]: p.get("lastmod") for p in PAGES})
-policy_lastmod = SITE.get("policy_lastmod") or {}
-check(sorted(policy_lastmod) == sorted(POLICY_NAMES), f"site.policy_lastmod keys are {sorted(policy_lastmod)}, want {sorted(POLICY_NAMES)}")
-DATES.update({name: policy_lastmod.get(name) for name in POLICY_NAMES})
-check("lastmod" not in SITE, "site.lastmod is retired; dates live on each page and in site.policy_lastmod")
-for key, value in DATES.items():
-    check(iso_date(value), f"lastmod for {key} is {value!r}, not a YYYY-MM-DD date")
-
-# ---- 5. Facts and the number allowlist --------------------------------------
-
-allowed_numbers = set(FACTS["allowed_numbers"])
-fact_numbers = {FACTS["price"].lstrip("$"), FACTS["free_habit_limit"], FACTS["free_nudges_per_month"],
-                FACTS["pomodoro_work_minutes"], FACTS["pomodoro_short_break_minutes"],
-                FACTS["pomodoro_long_break_minutes"], FACTS["achievement_badges"],
-                *FACTS["streak_milestones"], *FACTS["multi_checkin_range"]}
-for n in sorted(fact_numbers - allowed_numbers, key=float):
-    failures.append(f"facts value {n} is missing from facts.allowed_numbers")
-for n in sorted(allowed_numbers - fact_numbers - EXTRA_ALLOWED_NUMBERS, key=float):
-    failures.append(f"facts.allowed_numbers has {n}, which is neither a fact value nor a listed extra")
-check(re.fullmatch(r"\$\d+\.\d\d", FACTS["price"]) is not None, f"facts.price {FACTS['price']!r} is not a dollar amount")
-
-# ---- Rendering ---------------------------------------------------------------
-
+# 1. Manifest: exactly the mirror map, and every file matches its hash.
 try:
-    FRESH = gen.outputs()
-except Exception as e:  # a malformed or missing lastmod raises here; report and stop
-    print(f"FAIL   generator raised {type(e).__name__}: {e}")
-    for f in failures:
-        print(f"FAIL   {f}")
-    sys.exit(1)
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+except (OSError, ValueError) as e:
+    manifest = {}
+    failures.append(f"scripts/mirror.json: {e}")
+check(manifest.get("canonical_base") == CANONICAL_BASE, f"scripts/mirror.json: canonical_base is {manifest.get('canonical_base')!r}")
+entries = manifest.get("files", {})
+check(sorted(entries) == sorted(MIRROR), f"scripts/mirror.json: files {sorted(set(entries) ^ set(MIRROR))} differ from the mirror map")
 
-# a. Committed output is byte-identical to a fresh render.
-for rel, text in FRESH.items():
+pages: dict[str, str] = {}
+for rel, (source, url) in MIRROR.items():
     path = ROOT / rel
-    if not path.exists():
-        failures.append(f"{rel}: missing, run scripts/build-pages.py")
+    if not path.is_file():
+        failures.append(f"{rel}: missing, run scripts/sync-mirror.py")
         continue
-    check(path.read_bytes() == text.encode("utf-8"), f"{rel}: differs from a fresh render, run scripts/build-pages.py")
+    data = path.read_bytes()
+    pages[rel] = data.decode("utf-8")
+    entry = entries.get(rel, {})
+    check(entry.get("source") == source, f"scripts/mirror.json: {rel} source is {entry.get('source')!r}, want {source!r}")
+    check(entry.get("sha256") == sha256(data), f"{rel}: differs from the manifest, run scripts/sync-mirror.py")
 
-# 8. Any page directory that is not a configured slug is a stale page.
-SLUGS = {p["slug"] for p in PAGES}
-for d in sorted(ROOT.iterdir()):
-    if d.is_dir() and d.name not in {".git", "scripts"} and (d / "index.html").exists() and d.name not in SLUGS:
-        failures.append(f"{d.name}/index.html: page directory is not a configured slug (stale output?)")
+    # 2. Canonical and og:url: one canonical, on the custom domain, the page's
+    #    own clean URL, and og:url byte equal to it.
+    t = tags(pages[rel])
+    canons = [a.get("href") for tag, a in t if tag == "link" and a.get("rel") == "canonical"]
+    check(canons == [url], f"{rel}: canonical links {canons}, want [{url!r}]")
+    og = [a.get("content") for tag, a in t if tag == "meta" and a.get("property") == "og:url"]
+    check(og == [url], f"{rel}: og:url {og}, want [{url!r}]")
 
-HTML_PAGES = [(None, "index.html")] + [(p, f"{p['slug']}/index.html") for p in PAGES]
-
-
-def page_text_units(root: Node) -> list[str]:
-    """Blocks of visible text outside tables, used to judge Premium claims."""
-    units = []
-    for n in root.find_all(lambda n: n.tag in {"p", "li", "dt", "dd", "h1", "h2", "h3"}):
-        if any(a.tag in HIDDEN or a.tag == "table" for a in n.ancestors()):
-            continue
-        units.append(n.text())
-    return units
-
-
-def visible_units(root: Node) -> list[tuple[str, Node, "Node | None"]]:
-    """All visible text exactly once, as (text, owner, table): owner is the
-    nearest block element; inside a table each cell is its own unit."""
-    units: list = []
-
-    def rec(node: Node, table) -> None:
-        buf: list[str] = []
-
-        def flush() -> None:
-            t = re.sub(r"\s+", " ", "".join(buf)).strip()
-            if t:
-                units.append((t, node, table))
-            buf.clear()
-
-        for c in node.children:
-            if isinstance(c, str):
-                buf.append(c)
-            elif c.tag in HIDDEN:
-                continue
-            elif c.tag in INLINE:
-                buf.append(c.text())
-            else:
-                flush()
-                rec(c, c if c.tag == "table" else table)
-        flush()
-
-    rec(root, None)
-    return units
-
-
-premium_word = whole("Premium")
-free_word = whole("free")
-TIMER_MINUTES = {FACTS["pomodoro_work_minutes"], FACTS["pomodoro_short_break_minutes"], FACTS["pomodoro_long_break_minutes"]}
-PERIOD_WORDS = {"month", "monthly", "year", "yearly", "annual", "week"}
-TOKEN = re.compile(r"\$?\d+(?:\.\d+)?|[A-Za-z']+")
-premium_free_forms = {f.lower(): 0 for f in FACTS.get("premium_free_forms", [])}
-
-
-MONTHS = {"january", "february", "march", "april", "may", "june", "july", "august",
-          "september", "october", "november", "december"}
-
-
-def bind_numbers(text: str, ctx: "dict | None", dated_ok: bool = False) -> list[tuple[str, "str | None"]]:
-    """Each number in text with the problem its context finds, or None.
-    ctx is {"label": row label, "col": column head} for a table cell.
-    dated_ok allows a year right after a month name (the comparison page)."""
-    toks = list(TOKEN.finditer(text))
-    ranges = [(m.group(1), f"range '{m.group(0)}' is not the multi check-in range {' to '.join(FACTS['multi_checkin_range'])}")
-              for m in re.finditer(r"(?<![\w.])(\d+) to (\d+)(?![\w.])", text)
-              if [m.group(1), m.group(2)] != FACTS["multi_checkin_range"]]
-    free_ctx = bool(free_word.search(text)) or bool(ctx and ctx["col"] == "Free")
-    nudge_ctx = bool(re.search(r"\bnudges?\b", text, re.I)) or bool(ctx and re.search(r"nudge", ctx["label"], re.I))
-    habit_cell = bool(ctx and re.fullmatch(r"habits?", ctx["label"], re.I))
-    range_spans = [(m.start(), m.end()) for m in re.finditer(r"(?<![\w.])(\d+) to (\d+)(?![\w.])", text)
-                   if [m.group(1), m.group(2)] == FACTS["multi_checkin_range"]]
-    milestone_ctx = bool(re.search(r"\b(milestones?|days)\b", text, re.I))
-    out = []
-    for i, m in enumerate(toks):
-        s = m.group(0)
-        if not (s[0].isdigit() or s[0] == "$"):
-            continue
-        num = s.lstrip("$")
-        nxt = [x.group(0).lower() for x in toks[i + 1:i + 5]]
-        prv = [x.group(0).lower() for x in toks[max(0, i - 4):i]]
-        if s.startswith("$"):
-            if s != FACTS["price"]:
-                out.append((num, f"amount {s} is not facts.price {FACTS['price']}"))
-            elif any(w in PERIOD_WORDS for w in nxt[:4]):
-                out.append((num, f"amount {s} is followed by a billing period"))
-            elif any(w in PERIOD_WORDS for w in prv):
-                out.append((num, f"amount {s} is preceded by a billing period"))
-            else:
-                out.append((num, None))
-        elif any(w in ("minute", "minutes") for w in nxt[:2]):
-            k = next(j for j, w in enumerate(nxt[:2]) if w in ("minute", "minutes"))
-            after = nxt[k + 1:k + 3]
-            if after[:1] == ["work"]:
-                want = {FACTS["pomodoro_work_minutes"]}
-            elif after[:1] == ["short"] and after[1:2] and after[1].startswith("break"):
-                want = {FACTS["pomodoro_short_break_minutes"]}
-            elif after[:1] == ["long"] and after[1:2] and after[1].startswith("break"):
-                want = {FACTS["pomodoro_long_break_minutes"]}
-            else:
-                want = TIMER_MINUTES
-            out.append((num, None if num in want else f"'{' '.join([num, 'minute', *after])}' is not {sorted(want, key=int)}"))
-        elif any(w in ("achievement", "achievements", "badge", "badges") for w in nxt[:2]):
-            out.append((num, None if num == FACTS["achievement_badges"] else f"'{num} badges' is not facts.achievement_badges {FACTS['achievement_badges']}"))
-        elif (any(w in ("nudge", "nudges") for w in nxt[:2]) or any(w in ("nudge", "nudges") for w in prv[-2:])
-              or (nudge_ctx and nxt[:2] == ["a", "month"])):
-            k = next((j for j, w in enumerate(nxt[:2]) if w in ("nudge", "nudges")), -1)
-            period = nxt[k + 1:k + 3]
-            if num != FACTS["free_nudges_per_month"]:
-                out.append((num, f"'{num}' nudges is not facts.free_nudges_per_month {FACTS['free_nudges_per_month']}"))
-            elif len(period) == 2 and period[0] in ("a", "per", "each", "every") and period[1] != "month":
-                out.append((num, f"'{num} nudges {' '.join(period)}': only 'a month' may follow the nudge count"))
-            else:
-                out.append((num, None))
-        elif any(w in ("habit", "habits") for w in nxt[:2]) and (free_ctx or "limit" in nxt[:2]):
-            out.append((num, None if num == FACTS["free_habit_limit"] else f"'{num} habits' about the free tier is not facts.free_habit_limit {FACTS['free_habit_limit']}"))
-        elif habit_cell and free_ctx and text.strip() == s:
-            out.append((num, None if num == FACTS["free_habit_limit"] else f"Habits under Free is {num}, not facts.free_habit_limit {FACTS['free_habit_limit']}"))
-        elif num in FACTS["streak_milestones"] and milestone_ctx:
-            out.append((num, None))
-        elif num in FACTS["multi_checkin_range"] and any(a <= m.start() < b for a, b in range_spans):
-            out.append((num, None))
-        elif num == "3" and nxt[:2] == ["or", "more"]:
-            out.append((num, None))
-        elif num == "2026" and dated_ok and prv[-1:] and prv[-1] in MONTHS:
-            out.append((num, None))
-        else:
-            out.append((num, f"number {num} is outside every allowed context (a bound fact, a milestone with 'milestone' or 'days', '2 to 4', '3 or more', a dated year on the comparison page)"))
-    return ranges + out
-premium_phrases = [(p, whole(p)) for p in FACTS["premium_only"]]
-VIS_SUBJ = re.compile(r"\b(partner|partners|friend|friends|they|them|their|sister|someone|person|other)\b", re.I)
-VIS_VERB = re.compile(r"\b(see|sees|seen|watch|watches|told|show|shows|shown|notice|notices|follow|appear|appears|reach|reaches)\b", re.I)
-VIS_OBJ = re.compile(r"\b(completion|completions|complete|completed|streak|streaks|done today|widget|feed|progress|did|habit|habits)\b", re.I)
-EVERY_COMPLETION = re.compile(r"\b(every|each)\b(?:\s+[\w']+){0,2}?\s+(habit you complete|habits you complete|completions?|win|wins)\b|\b(every|each)\s+(completion|win)\b", re.I)
-RECEIVER = re.compile(r"\b(partner|partners|their phone|receives|they see|sees|gets)\b", re.I)
-VIS_OK = re.compile(r"\bPremium\b|weekly count|nudge", re.I)
-visibility_forms = {f.strip().lower(): 0 for f in FACTS.get("visibility_forms", [])}
-banned = [(p, whole_or_plural(p)) for p in FACTS["banned_phrases"]]
-negated = [(p, whole_or_plural(p)) for p in FACTS.get("negated_only", [])]
-negated_forms = [(f, whole(f)) for f in FACTS.get("negated_forms", [])]
-negated_forms_used = {f: 0 for f, _ in negated_forms}
-NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?")
-DOLLAR = re.compile(r"\$\d+(?:\.\d+)?")
-HABIT_COUNT = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?) habits?(?!\w)", re.I)
-NUDGE_COUNT = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?) nudges?(?!\w)", re.I)
-EMAIL = re.compile(r"(?:\"[^\"\r\n<>]+\"|[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+)@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
-
-
-def emails_in(text: str) -> set[str]:
-    """Addresses in the raw source and in its entity-decoded form."""
-    return set(EMAIL.findall(text)) | set(EMAIL.findall(htmlmod.unescape(text)))
-
-word_counts: list[tuple[str, int]] = []
-
-for page, rel in HTML_PAGES:
-    raw = FRESH[rel]
-    root = parse(raw)
-    body = first(root, lambda n: n.tag == "body")
-    main = first(root, lambda n: n.tag == "main")
-    footer = first(root, lambda n: n.tag == "footer")
-    title_node = first(root, lambda n: n.tag == "title")
-    title = title_node.text() if title_node else ""
-    description = meta(root, "name", "description") or ""
-    want_title = LANDING["title"] if page is None else page["title"]
-    want_desc = LANDING["description"] if page is None else page["description"]
-    url = gen.page_url(page)
-    footer_copy = first(root, lambda n: "foot-copy" in n.classes)
-
-    ld_nodes = root.find_all(lambda n: n.tag == "script" and n.attrs.get("type") == "application/ld+json")
-    ld_raw = "".join(c for n in ld_nodes for c in n.children if isinstance(c, str))
-    try:
-        graph = json.loads(ld_raw)["@graph"]
-    except (ValueError, KeyError, TypeError) as e:
-        failures.append(f"{rel}: JSON-LD does not parse: {e}")
-        graph = []
-
-    # Every piece of text a reader or a crawler sees, as sentence sized units,
-    # each marked with whether the competitor rule exempts it. On a page with
-    # "competitor", a competitor phrase or number may appear only in a sentence
-    # naming the competitor, in the row label or the competitor's own column of
-    # a table whose head names it, or in the page's own title, description and
-    # JSON-LD page name or description. The h1 is never exempt.
-    competitor = page.get("competitor") if page else None
-    comp_rx = whole(competitor) if competitor else None
-    comp_phrases = {p.lower() for p in page.get("competitor_phrases", [])} if page else set()
-    comp_numbers = set(page.get("competitor_numbers", [])) if page else set()
-
-    def names_competitor(text: str) -> bool:
-        return bool(comp_rx and comp_rx.search(text))
-
-    units: list[tuple[str, bool, str]] = []  # (text, exempt, where)
-    number_units: list[tuple[str, bool, str, "dict | None"]] = []
-    for text, node, table in visible_units(body) if body else []:
-        if table is not None and node.tag in {"th", "td"}:
-            head = table_head(table)
-            tr = node.parent
-            col = row_cells(tr).index(node) if tr is not None and node in row_cells(tr) else -1
-            in_body = any(a.tag == "tbody" for a in node.ancestors())
-            exempt = bool(competitor) and in_body and competitor in head and (col == 0 or (0 <= col < len(head) and head[col] == competitor))
-            label = f"table cell (column {head[col]!r})" if 0 <= col < len(head) else "table cell"
-            parts = [(norm(text), exempt, label)]
-            cell_ctx = {"label": row_cells(tr)[0].text() if tr is not None else "", "col": head[col] if 0 <= col < len(head) else ""}
-        elif node.tag == "h1":
-            parts = [(s, False, "h1") for s in sentences(text)]
-            cell_ctx = None
-        else:
-            parts = [(s, names_competitor(s), node.tag) for s in sentences(text)]
-            cell_ctx = None
-        units += parts
-        if node is not footer_copy:
-            number_units += [(*u, cell_ctx) for u in parts]
-    for text, where in [(title, "title"), (description, "meta description")]:
-        units.append((norm(text), bool(competitor), where))
-        number_units.append((norm(text), bool(competitor), where, None))
-    for key, value in [("og:title", meta(root, "property", "og:title")), ("og:description", meta(root, "property", "og:description")),
-                       ("twitter:title", meta(root, "name", "twitter:title")), ("twitter:description", meta(root, "name", "twitter:description"))]:
-        if value:
-            units.append((norm(value), bool(competitor) and value in (title, description), key))
-    for n in root.walk():
-        for attr in ("aria-label", "alt"):
-            if n.attrs.get(attr):
-                units += [(s, names_competitor(s), attr) for s in sentences(n.attrs[attr])]
-
-    def ld_strings(obj):
-        if isinstance(obj, dict):
-            page_node = obj.get("@type") in ("WebPage", "ListItem")
-            for k, v in obj.items():
-                if isinstance(v, str):
-                    if k in ("@type", "@id", "@context", "url", "item"):
-                        continue
-                    if page_node and k in ("name", "description"):
-                        yield norm(v), bool(competitor), f"JSON-LD {obj.get('@type')} {k}"
-                    else:
-                        for s in sentences(v):
-                            yield s, names_competitor(s), f"JSON-LD {k}"
-                else:
-                    yield from ld_strings(v)
-        elif isinstance(obj, list):
-            for v in obj:
-                yield from ld_strings(v)
-    units += list(ld_strings(graph))
-
-    # b. Every number is an allowed fact, and bound to the right fact by its
-    #    context: minutes, badges, nudges, free habits and dollar amounts.
-    #    Competitor numbers pass only where the competitor rule exempts them.
-    for text, exempt, where, ctx in number_units:
-        for num in NUMBER.findall(text):
-            if num in allowed_numbers or (num in comp_numbers and exempt):
-                continue
-            extra = " (a competitor number outside the places the competitor rule allows)" if num in comp_numbers else ""
-            failures.append(f"{rel}: number {num} is not in facts.allowed_numbers{extra}, in {where}: {text!r}")
-        for num, problem in bind_numbers(text, ctx, dated_ok=bool(competitor)):
-            if problem and not (num in comp_numbers and exempt):
-                failures.append(f"{rel}: {problem}, in {where}: {text!r}")
-    if footer_copy is not None:
-        check(footer_copy.text() == f"© {gen.YEAR} HabitFlame", f"{rel}: footer copyright line changed: {footer_copy.text()!r}")
-
-    # c. Premium-only features are only ever named next to the word Premium.
-    #    A sentence with the word "free" and a Premium-only feature fails
-    #    unless it is, word for word, one of facts.premium_free_forms.
-    def premium_free(sentence: str, where: str) -> None:
-        sentence = norm(sentence)
-        if free_word.search(sentence) and any(rx.search(sentence) for _, rx in premium_phrases):
-            key = re.sub(r"\s+", " ", sentence).strip().lower()
-            if key in premium_free_forms:
-                premium_free_forms[key] += 1
-            else:
-                failures.append(f"{rel}: {where} has 'free' and a Premium-only feature and is not in facts.premium_free_forms: {sentence!r}")
-
-    for unit in page_text_units(root) + [title, description]:
-        for sentence in sentences(unit):
-            for phrase, rx in premium_phrases:
-                if rx.search(sentence) and not premium_word.search(sentence):
-                    kind = "free sentence" if free_word.search(sentence) else "sentence"
-                    failures.append(f"{rel}: {kind} names Premium-only '{phrase}' without 'Premium': {sentence!r}")
-            premium_free(sentence, "sentence")
-    for table in by_tag(root, "table"):
-        head = table_head(table)
-        comp_heads = [["", competitor, "HabitFlame"], ["", "HabitFlame", competitor]] if competitor else []
-        for tr in by_tag(first(table, lambda n: n.tag == "tbody") or table, "tr"):
-            for c in row_cells(tr):
-                premium_free(c.text(), "table cell")
-        if head == GUIDE_TABLE_HEAD:
-            free_col = head.index("Free")
-            for tr in by_tag(first(table, lambda n: n.tag == "tbody") or table, "tr"):
-                cells = [c.text() for c in row_cells(tr)]
-                if free_col < len(cells) and any(rx.search(cells[free_col]) for _, rx in premium_phrases):
-                    failures.append(f"{rel}: Free column cell names a Premium-only feature: {cells[free_col]!r}")
-                if any(rx.search(cells[0]) for _, rx in premium_phrases) or cells[0].lower() in {p.lower() for p in FACTS["premium_only"]}:
-                    check(free_col < len(cells) and cells[free_col].lower() in {"no", "not included"},
-                          f"{rel}: table row {cells[0]!r} marks a Premium-only feature as available under Free")
-        elif head in comp_heads:
-            for tr in by_tag(first(table, lambda n: n.tag == "tbody") or table, "tr"):
-                row = " ".join(c.text() for c in row_cells(tr))
-                if any(rx.search(row) for _, rx in premium_phrases) and not premium_word.search(row):
-                    failures.append(f"{rel}: table row names a Premium-only feature without 'Premium': {row!r}")
-        else:
-            failures.append(f"{rel}: table head {head!r} is neither {GUIDE_TABLE_HEAD!r} nor a competitor head {comp_heads!r}")
-
-    # d. Banned phrases (whole phrase, or with a trailing s or es), anywhere a
-    #    reader or a crawler sees text. A negated-only phrase must sit inside
-    #    one of the exact facts.negated_forms.
-    for text, exempt, where in units:
-        for phrase, rx in banned:
-            if rx.search(text) and not (phrase.lower() in comp_phrases and exempt):
-                failures.append(f"{rel}: banned phrase '{phrase}' in {where}: {text!r}")
-        form_spans = []
-        for form, frx in negated_forms:
-            for fm in frx.finditer(text):
-                form_spans.append((fm.start(), fm.end()))
-                negated_forms_used[form] += 1
-        for phrase, rx in negated:
-            for m in rx.finditer(text):
-                if any(s <= m.start() and m.end() <= e for s, e in form_spans):
-                    continue
-                if phrase.lower() in comp_phrases and exempt:
-                    continue
-                failures.append(f"{rel}: '{phrase}' outside every facts.negated_forms entry, in {where}: {text!r}")
-
-    # o. Where a partner receives "each" or "every" completion, habit or win,
-    #    the sentence says the completions are shared ones.
-    for text, _exempt, where in units:
-        if where.startswith(("JSON-LD", "og:", "twitter:")):
-            continue
-        if EVERY_COMPLETION.search(text) and RECEIVER.search(text) and not re.search(r"\bshare(d)?\b", text, re.I):
-            failures.append(f"{rel}: a partner receives every completion without 'shared', in {where}: {text!r}")
-
-    # m. A sentence where a partner sees, is shown or follows a completion,
-    #    streak, widget, feed or progress must carry the Premium condition, the
-    #    weekly count or a nudge, or be one of facts.visibility_forms.
-    for text, _exempt, where in units:
-        if where.startswith("JSON-LD") or where.startswith(("og:", "twitter:")):
-            continue
-        if VIS_SUBJ.search(text) and VIS_VERB.search(text) and VIS_OBJ.search(text):
-            if VIS_OK.search(text):
-                continue
-            key = text.strip().lower()
-            if key in visibility_forms:
-                visibility_forms[key] += 1
-                continue
-            failures.append(f"{rel}: partner visibility without a Premium condition, in {where}: {text!r}")
-
-    # e. Links, store link, brand footer, contact email. Internal hrefs are
-    #    resolved as a browser would; a path with an empty or dot segment fails
-    #    outright, and the result must sit under base_url and map to a file.
-    for n in root.walk():
+    # 3. No link, script, stylesheet or image points back at GitHub Pages or
+    #    at a relative path, which would resolve to the GitHub Pages copy.
+    for tag, a in t:
         for attr in ("href", "src"):
-            href = n.attrs.get(attr)
-            if href is None or href.startswith(("mailto:", "tel:")):
+            v = a.get(attr)
+            if v is None or v.startswith(("mailto:", "tel:", "#")):
                 continue
-            split = urlsplit(href)
-            if split.scheme or split.netloc:
-                if not href.startswith(BASE + "/") and href != BASE:
-                    continue  # external
-            path = split.path
-            if "//" in path or "/./" in path or "/../" in path or path.startswith(("./", "../")) or path.endswith(("/.", "/..")) or path in (".", ".."):
-                failures.append(f"{rel}: link {href!r} has an empty or dot path segment")
-                continue
-            target_url = urljoin(url, href)
-            if not target_url.startswith(BASE + "/"):
-                failures.append(f"{rel}: link {href!r} resolves to {target_url}, outside {BASE}/")
-                continue
-            path_part, _, frag = target_url[len(BASE):].partition("#")
-            path_part = path_part.split("?", 1)[0].lstrip("/")
-            fpath = ROOT / path_part
-            if path_part == "" or path_part.endswith("/") or fpath.is_dir():
-                fpath = fpath / "index.html"
-            if not fpath.is_file():
-                failures.append(f"{rel}: link {href!r} does not resolve to a file ({fpath.relative_to(ROOT)})")
-                continue
-            if frag:
-                trel = str(fpath.relative_to(ROOT))
-                ttext = FRESH.get(trel) or fpath.read_text(encoding="utf-8", errors="replace")
-                check(re.search(r'\bid="' + re.escape(frag) + '"', ttext) is not None,
-                      f"{rel}: link {href!r} points at #{frag}, which {trel} does not have")
-    check(raw.count(PINNED_APP_STORE_URL) >= 2, f"{rel}: App Store URL appears {raw.count(PINNED_APP_STORE_URL)} times, want 2 or more")
-    store_buttons = root.find_all(lambda n: n.tag == "a" and "store" in n.classes and n.attrs.get("href") == PINNED_APP_STORE_URL)
-    check(len(store_buttons) >= 1, f"{rel}: no App Store button")
-    brand = footer and first(footer, lambda n: n.tag == "a" and n.attrs.get("href") == BRAND_URL)
-    check(bool(brand) and brand.text() == BRAND_TEXT, f"{rel}: footer lacks <a href=\"{BRAND_URL}\">{BRAND_TEXT}</a>")
-    check("nofollow" not in raw.lower(), f"{rel}: contains nofollow")
-    emails = emails_in(raw)
-    check(emails <= {SITE["contact_email"]}, f"{rel}: unexpected email addresses {sorted(emails - {SITE['contact_email']})}")
-    check(SITE["contact_email"] in emails, f"{rel}: contact email missing")
+            check(v.startswith("https://"), f"{rel}: {tag} {attr} {v!r} is not an absolute https URL")
+            check("github.io" not in v, f"{rel}: {tag} {attr} {v!r} points at GitHub Pages")
 
-    # f. Metadata.
-    check(title == want_title, f"{rel}: <title> is {title!r}, want {want_title!r}")
-    if len(title) > 60:
-        over = len(title) - 60
-        notes.append(f"{rel}: title is {len(title)} chars ({over} over 60)")
-        check(over <= 5, f"{rel}: title is {len(title)} chars, more than 5 over the 60 limit")
-    check(description == want_desc, f"{rel}: meta description differs from pages.json")
-    check(len(description) <= 160, f"{rel}: description is {len(description)} chars, limit 160")
-    check(meta(root, "property", "og:title") == title, f"{rel}: og:title differs from title")
-    check(meta(root, "name", "twitter:title") == title, f"{rel}: twitter:title differs from title")
-    check(meta(root, "property", "og:description") == description, f"{rel}: og:description differs from description")
-    check(meta(root, "name", "twitter:description") == description, f"{rel}: twitter:description differs from description")
-    canon = first(root, lambda n: n.tag == "link" and n.attrs.get("rel") == "canonical")
-    check(canon is not None and canon.attrs.get("href") == url, f"{rel}: canonical is not {url}")
-    check(meta(root, "property", "og:url") == url, f"{rel}: og:url is not {url}")
-    robots = (meta(root, "name", "robots") or "index").lower()
-    check("noindex" not in robots and "none" not in robots, f"{rel}: robots meta blocks indexing: {robots}")
-    check(len(by_tag(root, "h1")) == 1, f"{rel}: expected exactly one h1")
-    dts = [n.text() for n in by_tag(root, "dt")]
-    dds = [n.text() for n in by_tag(root, "dd")]
-    faqs = [g for g in graph if g.get("@type") == "FAQPage"]
-    if dts:
-        check(len(faqs) == 1, f"{rel}: visible FAQ but {len(faqs)} FAQPage nodes")
-        if faqs:
-            ents = faqs[0].get("mainEntity", [])
-            check([e.get("name") for e in ents] == dts, f"{rel}: FAQPage questions differ from the visible questions")
-            check([e.get("acceptedAnswer", {}).get("text") for e in ents] == dds, f"{rel}: FAQPage answers differ from the visible answers")
-    else:
-        check(not faqs, f"{rel}: FAQPage without a visible FAQ")
-    for bad in ("AggregateRating", "ratingValue", "reviewCount"):
-        check(bad.lower() not in raw.lower(), f"{rel}: contains {bad}")
-    types_present = [g.get("@type") for g in graph]
-    want_types = {"WebPage"} | ({"WebSite", "SoftwareApplication"} if page is None else {"BreadcrumbList"})
-    check(want_types <= set(types_present), f"{rel}: JSON-LD types {types_present} lack {sorted(want_types - set(types_present))}")
-    for g in graph:
-        if g.get("@type") == "WebPage":
-            check(g.get("name") == title and g.get("description") == description and g.get("url") == url,
-                  f"{rel}: WebPage name, description or url differs from the page")
-        if g.get("@type") in ("WebSite", "SoftwareApplication"):
-            check(g.get("name") == PINNED_NAME, f"{rel}: JSON-LD {g.get('@type')} name is {g.get('name')!r}, pinned {PINNED_NAME!r}")
-        if g.get("@type") == "SoftwareApplication":
-            check(g.get("url") == PINNED_APP_STORE_URL, f"{rel}: SoftwareApplication url is not the pinned App Store URL")
-            check("review" not in g and "aggregateRating" not in g, f"{rel}: SoftwareApplication carries ratings")
+    # 4. Retired false policy sentences never appear.
+    body = flat(pages[rel])
+    for stale in RETIRED_POLICY_SENTENCES:
+        check(stale.lower() not in body, f"{rel}: still says {stale!r}")
 
-    # g. Word counts.
-    if page is None:
-        n_words = len(re.findall(r"\S*[A-Za-z0-9]\S*", main.text() if main else ""))
-        word_counts.append((rel + " (main)", n_words))
-        check(n_words >= 500, f"{rel}: main has {n_words} words, want at least 500")
-    else:
-        art = first(root, lambda n: "article-body" in n.classes)
-        n_words = len(re.findall(r"\S*[A-Za-z0-9]\S*", art.text() if art else ""))
-        word_counts.append((rel + " (article-body)", n_words))
-        check(900 <= n_words <= 1500, f"{rel}: article body has {n_words} words, want 900 to 1500")
+# 5. The privacy page is the truthful policy.
+policy, policy_links = visible_main(pages.get("privacy-policy.html", ""))
+check(f"mailto:{CONTACT}" in policy_links, "privacy-policy.html: no visible mailto link to the contact address")
+for must in POLICY_MUST:
+    check(must in policy, f"privacy-policy.html: missing {must!r}")
 
-# 9. Every allowed negated form is one the copy actually uses.
-for form, count in negated_forms_used.items():
-    check(count > 0, f"facts.negated_forms has {form!r}, which no page uses (remove it)")
+# Parsed visible text only: the JSON-LD in the head repeats the questions,
+# and commented out markup is not on the page.
+support, support_links = visible_main(pages.get("support.html", ""))
+check(f"mailto:{CONTACT}" in support_links, "support.html: no visible mailto link to the contact address")
+for must in SUPPORT_MUST:
+    check(must in support, f"support.html: missing {must!r} from the visible page")
 
-# c. Every allowlisted free and Premium sentence is one the copy uses.
-for form, count in premium_free_forms.items():
-    check(count > 0, f"facts.premium_free_forms has {form!r}, which no page uses (remove it)")
-
-# m. Every allowlisted visibility sentence is one the copy uses.
-for form, count in visibility_forms.items():
-    check(count > 0, f"facts.visibility_forms has {form!r}, which no page uses (remove it)")
-
-# l. Text colors in styles.css meet 4.5:1 in both themes.
-CSS = (ROOT / "styles.css").read_text(encoding="utf-8")
+# 6. Byte equality with the canonical copy, when asked.
+if args.source:
+    # Byte equality only proves the copy; the canonical site's own checker
+    # proves the content, so run it on the same checkout first.
+    import subprocess
+    canon = subprocess.run([sys.executable, str(args.source / "scripts" / "verify-pages.py")], capture_output=True, text=True)
+    check(canon.returncode == 0, f"{args.source}: its scripts/verify-pages.py failed: {canon.stdout.strip().splitlines()[-1:] or canon.stderr.strip()[-200:]}")
+    for rel, (source, _url) in MIRROR.items():
+        src = args.source / source
+        check(src.is_file() and rel in pages and src.read_bytes() == pages[rel].encode("utf-8"),
+              f"{rel}: not byte equal to {src}")
+def fetch(url: str, want_type: str = "text/html") -> "bytes | None":
+    """The body of a 200 response whose content type is want_type, else None
+    with a failure recorded: an error page served as HTML is not the asset."""
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            ctype = r.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            body = r.read()
+            # A redirect to the other host would compare a page with itself.
+            if r.geturl() != url:
+                failures.append(f"{url}: redirected to {r.geturl()}")
+                return None
+            if r.status != 200 or ctype != want_type:
+                failures.append(f"{url}: status {r.status}, content type {ctype!r}, want 200 and {want_type!r}")
+                return None
+            return body
+    except OSError as e:
+        failures.append(f"fetching {url} failed: {e}")
+        return None
 
 
-def css_vars(block: str) -> dict[str, str]:
-    return {k: v.strip() for k, v in re.findall(r"--([\w-]+):\s*([^;]+);", block)}
+if args.live:
+    # Both published copies: the custom domain page and this repository's
+    # GitHub Pages address (the one App Store Connect links), plus the
+    # stylesheet and icon the pages load from the custom domain.
+    for rel, (_source, url) in MIRROR.items():
+        mirror_url = f"{MIRROR_BASE}/{rel[:-len('index.html')] if rel.endswith('index.html') else rel}"
+        for where in (url, mirror_url):
+            live = fetch(where)
+            if live is not None:
+                check(rel in pages and live == pages[rel].encode("utf-8"), f"{rel}: not byte equal to {where}")
+    # The files this repository keeps, and the sitemap it no longer serves.
+    for name, want in (("robots.txt", ROBOTS), (VERIFICATION_FILE, f"google-site-verification: {VERIFICATION_FILE}\n")):
+        body = fetch(f"{MIRROR_BASE}/{name}", "text/plain" if name.endswith(".txt") else "text/html")
+        check(body is None or body.decode("utf-8", "replace") == want, f"{MIRROR_BASE}/{name}: served content differs")
+    try:
+        with urllib.request.urlopen(f"{MIRROR_BASE}/sitemap.xml", timeout=30) as r:
+            failures.append(f"{MIRROR_BASE}/sitemap.xml: still served (status {r.status})")
+    except urllib.error.HTTPError as e:
+        check(e.code == 404, f"{MIRROR_BASE}/sitemap.xml: status {e.code}, want 404")
+    except OSError as e:
+        failures.append(f"fetching {MIRROR_BASE}/sitemap.xml failed: {e}")
+    assets = sorted({v for text in pages.values() for tag, a in tags(text) if tag == "link"
+                     for v in [a.get("href", "")] if v.startswith(CANONICAL_BASE + "/") and a.get("rel") in ("stylesheet", "icon")})
+    for url in assets:
+        want = "text/css" if ".css" in url else "image/png"
+        body = fetch(url, want)
+        if body is None:
+            continue
+        if want == "image/png":
+            check(body.startswith(b"\x89PNG\r\n\x1a\n"), f"{url}: not a PNG image")
+        else:
+            # The page asks for site.css?v=<first 12 hex of its SHA-256>, so
+            # the served file must hash to exactly that version.
+            version = url.split("?v=", 1)[-1]
+            check(sha256(body)[:12] == version, f"{url}: served stylesheet hashes to {sha256(body)[:12]}, not {version}")
 
+# 7. No sitemap: a sitemap lists canonical URLs only, and those are the custom
+#    domain's, listed in its own sitemap. robots.txt stays, without one.
+check(not (ROOT / "sitemap.xml").exists(), "sitemap.xml: the mirror must not carry a sitemap")
+robots = ROOT / "robots.txt"
+check(robots.is_file() and robots.read_text(encoding="utf-8") == ROBOTS, "robots.txt: content changed")
 
-def css_rule(selector: str) -> dict[str, str]:
-    m = re.search(r"(?m)^" + re.escape(selector) + r"\s*\{([^}]*)\}", CSS)
-    return {k.strip(): v.strip() for k, v in re.findall(r"([\w-]+)\s*:\s*([^;]+);", m.group(1))} if m else {}
+# 8. The Search Console ownership file for the GitHub Pages property stays.
+vf = ROOT / VERIFICATION_FILE
+check(vf.is_file() and vf.read_text(encoding="utf-8") == f"google-site-verification: {VERIFICATION_FILE}\n",
+      f"{VERIFICATION_FILE}: missing or changed")
 
+# 9. Nothing stale: every HTML file is a mirror page or the verification file,
+#    and the retired generator and stylesheet are gone.
+allowed_html = set(MIRROR) | {VERIFICATION_FILE}
+for f in sorted(ROOT.rglob("*.html")):
+    rel = str(f.relative_to(ROOT))
+    if rel.split("/")[0] in {".git"}:
+        continue
+    check(rel in allowed_html, f"{rel}: an HTML file outside the mirror map (stale?)")
+for gone in ("scripts/build-pages.py", "scripts/pages.json", "scripts/template.html", "styles.css"):
+    check(not (ROOT / gone).exists(), f"{gone}: retired; the site is built in habitflame-web")
 
-def css_color(value: str, env: dict[str, str]) -> str:
-    for _ in range(5):
-        m = re.fullmatch(r"var\(--([\w-]+)\)", value.strip())
-        if not m:
-            break
-        value = env[m.group(1)]
-    value = value.strip()
-    if re.fullmatch(r"#[0-9a-fA-F]{3}", value):
-        value = "#" + "".join(ch * 2 for ch in value[1:])
-    if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
-        raise ValueError(f"not a hex color: {value!r}")
-    return value
-
-
-def contrast(a: str, b: str) -> float:
-    def lum(h: str) -> float:
-        rgb = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
-        rgb = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
-        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
-    hi, lo = sorted((lum(a), lum(b)), reverse=True)
-    return (hi + 0.05) / (lo + 0.05)
-
-
-dark_m = re.search(r"(?m)^:root\s*\{([^}]*)\}", CSS)
-light_m = re.search(r'@media \(prefers-color-scheme: light\)\s*\{\s*:root:not\(\[data-theme="dark"\]\)\s*\{([^}]*)\}', CSS)
-check(bool(dark_m and light_m), "styles.css: cannot find the dark :root block or the light theme block")
-contrast_lines = []
-if dark_m and light_m:
-    dark_env = css_vars(dark_m.group(1))
-    themes = {"dark": dark_env, "light": {**dark_env, **css_vars(light_m.group(1))}}
-    store, hover = css_rule(".store"), css_rule(".store:hover")
-    for theme, env in themes.items():
-        pairs = [(f"--{t} on --{b}", env[t], env[b]) for t in ("ink", "ink-2", "ink-3", "link") for b in ("bg", "bg-2")]
-        skip, skip_hover = css_rule(".skip"), css_rule(".skip:hover")
-        pairs += [("skip link", skip.get("color", ""), skip.get("background", "")),
-                  ("skip link hover", skip_hover.get("color", ""), skip_hover.get("background", ""))]
-        pairs += [("store button", store.get("color", ""), store.get("background", "")),
-                  ("store button hover", hover.get("color", ""), hover.get("background", ""))]
-        worst = []
-        for name, fg, bg in pairs:
-            try:
-                ratio = contrast(css_color(fg, env), css_color(bg, env))
-            except (KeyError, ValueError) as e:
-                failures.append(f"styles.css {theme}: {name}: {e}")
-                continue
-            worst.append((ratio, name))
-            check(ratio >= 4.5, f"styles.css {theme}: {name} is {ratio:.2f}:1, below 4.5:1")
-        if worst:
-            r, name = min(worst)
-            contrast_lines.append(f"contrast {theme}: lowest {r:.2f}:1 ({name}) of {len(worst)} pairs")
-
-# h. Prose hygiene.
+# 10. Prose hygiene in the files this repository owns.
 DASHES = {0x2012, 0x2013, 0x2014, 0x2015, 0x2212}
-PICTO_RANGES = [(0x1F000, 0x10FFFF), (0x2600, 0x27BF), (0x2B00, 0x2BFF), (0x2300, 0x23FF), (0x2190, 0x21FF),
-                (0xFE00, 0xFE0F), (0x200D, 0x200D), (0x20D0, 0x20FF), (0x3030, 0x3030), (0x303D, 0x303D), (0x3297, 0x3297), (0x3299, 0x3299)]
-
-
-def pictographic(cp: int) -> bool:
-    return any(lo <= cp <= hi for lo, hi in PICTO_RANGES)
-
-
-# The only list, stored rot13 so this file never spells the names it bans.
+# Stored rot13 so this file never spells the names it bans.
 TOOL_NAMES = {codecs.decode(w, "rot13") for w in ("pynhqr", "pbqrk", "tcg", "naguebcvp", "bcranv")}
-tool_rx = [(w, whole(w)) for w in sorted(TOOL_NAMES)]
-
-hygiene_files = {
-    "scripts/pages.json": (ROOT / "scripts/pages.json").read_text(encoding="utf-8"),
-    "scripts/template.html": (ROOT / "scripts/template.html").read_text(encoding="utf-8"),
-    "styles.css": (ROOT / "styles.css").read_text(encoding="utf-8"),
-    "scripts/build-pages.py": GEN_PATH.read_text(encoding="utf-8"),
-    "scripts/verify-pages.py": pathlib.Path(__file__).read_text(encoding="utf-8"),
-    "privacy-policy.html": (ROOT / "privacy-policy.html").read_text(encoding="utf-8"),
-    "support.html": (ROOT / "support.html").read_text(encoding="utf-8"),
-}
-hygiene_files.update(FRESH)
-for name, text in hygiene_files.items():
-    for lineno, line in enumerate(text.splitlines(), 1):
+for name in ("README.md", "scripts/sync-mirror.py", "scripts/verify-pages.py", "scripts/mirror.json", "robots.txt"):
+    p = ROOT / name
+    if not p.is_file():
+        failures.append(f"{name}: missing")
+        continue
+    for lineno, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
         for ch in line:
-            cp = ord(ch)
-            if cp in DASHES:
-                failures.append(f"{name}:{lineno}: dash character U+{cp:04X}")
-            elif pictographic(cp):
-                failures.append(f"{name}:{lineno}: pictographic character U+{cp:04X}")
-        for w, rx in tool_rx:
-            if rx.search(line):
+            if ord(ch) in DASHES or ord(ch) >= 0x1F000:
+                failures.append(f"{name}:{lineno}: dash or pictographic character U+{ord(ch):04X}")
+        for w in TOOL_NAMES:
+            if re.search(r"(?<!\w)" + re.escape(w) + r"(?!\w)", line, re.I):
                 failures.append(f"{name}:{lineno}: tool name '{w}'")
 
-
-def strings(value):
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, list):
-        for v in value:
-            yield from strings(v)
-    elif isinstance(value, dict):
-        for v in value.values():
-            yield from strings(v)
-
-
-for s in strings(gen.CONFIG):
-    if " - " in s:
-        failures.append(f"scripts/pages.json: spaced hyphen in {s[:80]!r}")
-
-# i. Sitemap lists exactly the landing, the guides and the policy pages, each
-#    dated by its own configured lastmod.
-sitemap = FRESH["sitemap.xml"]
-locs = [htmlmod.unescape(u) for u in re.findall(r"<loc>([^<]*)</loc>", sitemap)]
-EXPECTED_URLS = [
-    "https://vishutdhar.github.io/HabitFlame-Public/",
-    "https://vishutdhar.github.io/HabitFlame-Public/accountability-partner-habit-tracker/",
-    "https://vishutdhar.github.io/HabitFlame-Public/streak-tracker-app/",
-    "https://vishutdhar.github.io/HabitFlame-Public/pomodoro-habit-app/",
-    "https://vishutdhar.github.io/HabitFlame-Public/habit-app-for-couples/",
-    "https://vishutdhar.github.io/HabitFlame-Public/daily-habit-tracker-with-reminders/",
-    "https://vishutdhar.github.io/HabitFlame-Public/habitflame-vs-habitshare/",
-    "https://vishutdhar.github.io/HabitFlame-Public/support.html",
-    "https://vishutdhar.github.io/HabitFlame-Public/privacy-policy.html",
-    "https://vishutdhar.github.io/HabitFlame-Public/terms-of-service.html",
-]
-check(sorted(gen.sitemap_urls()) == sorted(EXPECTED_URLS), f"generator sitemap URLs differ from the pinned list: {sorted(set(gen.sitemap_urls()) ^ set(EXPECTED_URLS))}")
-check(gen.POLICY_PAGES == ["support.html", "privacy-policy.html", "terms-of-service.html"], f"generator POLICY_PAGES is {gen.POLICY_PAGES}")
-want_locs = EXPECTED_URLS
-check(len(locs) == len(set(locs)), f"sitemap.xml: duplicate URLs {sorted({u for u in locs if locs.count(u) > 1})}")
-check(set(locs) == set(want_locs), f"sitemap.xml: lists {sorted(set(locs) ^ set(want_locs))} unexpectedly or misses them")
-check(len(locs) == 1 + len(PAGES) + len(gen.POLICY_PAGES), f"sitemap.xml: {len(locs)} URLs")
-pairs = [(htmlmod.unescape(u), d) for u, d in re.findall(r"<loc>([^<]*)</loc>\s*<lastmod>([^<]*)</lastmod>", sitemap)]
-check(len(pairs) == len(locs), f"sitemap.xml: {len(locs)} URLs but {len(pairs)} have a lastmod")
-url_date = {f"{BASE}/": DATES["landing"]}
-url_date.update({f"{BASE}/{p['slug']}/": DATES[p["slug"]] for p in PAGES})
-url_date.update({f"{BASE}/{n}": DATES[n] for n in POLICY_NAMES})
-for u, d in pairs:
-    check(iso_date(d), f"sitemap.xml: lastmod {d!r} for {u} is not a YYYY-MM-DD date")
-    check(d == url_date.get(u), f"sitemap.xml: lastmod for {u} is {d}, configured {url_date.get(u)}")
-
-# i2. Dates against the baseline, the first of origin/main, main or the
-#     merge-base with HEAD's upstream that resolves. Read only git calls.
-#     Without a baseline these checks are skipped, never failed.
-#     a. lastmod must advance: a page whose content differs from the baseline
-#        is dated strictly later than the baseline's configured date for it;
-#        an identical page keeps the baseline's date.
-#     b. Commit-date bound for policy pages: identical to the baseline means
-#        dated no later than its last change there; changed means no earlier.
-def git(*args: str) -> "bytes | None":
-    try:
-        r = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True)
-    except OSError:
-        return None
-    return r.stdout if r.returncode == 0 else None
-
-
-def baseline_ref() -> "str | None":
-    for ref in ("origin/main", "main"):
-        if git("rev-parse", "--verify", "-q", ref + "^{commit}") is not None:
-            return ref
-    upstream = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
-    if upstream:
-        base = git("merge-base", "HEAD", upstream.decode().strip())
-        if base:
-            return base.decode().strip()
-    return None
-
-
-BASELINE = baseline_ref()
-skip_lines: list[str] = []
-if BASELINE is None:
-    skip_lines.append("policy-date history check skipped: no baseline ref")
-else:
-    base_raw = git("show", f"{BASELINE}:scripts/pages.json")
-    try:
-        base_cfg = json.loads(base_raw) if base_raw else None
-    except ValueError:
-        base_cfg = None
-    base_dates: dict[str, str] = {}
-    if base_cfg:
-        fallback = base_cfg.get("site", {}).get("lastmod")
-        base_dates["index.html"] = base_cfg.get("landing", {}).get("lastmod") or fallback
-        for bp in base_cfg.get("pages", []):
-            base_dates[f"{bp['slug']}/index.html"] = bp.get("lastmod") or fallback
-        for name in POLICY_NAMES:
-            base_dates[name] = (base_cfg.get("site", {}).get("policy_lastmod") or {}).get(name) or fallback
-    targets = [("index.html", DATES["landing"], FRESH["index.html"].encode("utf-8"))]
-    targets += [(f"{p['slug']}/index.html", DATES[p["slug"]], FRESH[f"{p['slug']}/index.html"].encode("utf-8")) for p in PAGES]
-    targets += [(name, DATES[name], (ROOT / name).read_bytes()) for name in POLICY_NAMES]
-    for rel_path, conf, here in targets:
-        before = base_dates.get(rel_path)
-        if not before or not iso_date(conf):
-            continue  # new to the baseline's config: every configured date is new
-        if here == git("show", f"{BASELINE}:{rel_path}"):
-            check(conf == before, f"{rel_path}: unchanged from {BASELINE} but lastmod moved from {before} to {conf}")
-        else:
-            check(conf > before, f"{rel_path}: changed from {BASELINE} but lastmod {conf} is not later than {before}")
-    for name in POLICY_NAMES:
-        on_base = git("show", f"{BASELINE}:{name}")
-        base_date = (git("log", "-1", "--format=%ad", "--date=short", BASELINE, "--", name) or b"").decode().strip()
-        conf = DATES.get(name)
-        if on_base is None or not base_date or not iso_date(conf):
-            continue  # not on the baseline yet
-        if (ROOT / name).read_bytes() == on_base:
-            check(conf <= base_date, f"{name}: unchanged from {BASELINE} (last changed {base_date}) but dated {conf}")
-        else:
-            check(conf >= base_date, f"{name}: changed from {BASELINE} but dated {conf}, before its change there on {base_date}")
-for u in locs:
-    rel = u[len(BASE) + 1:] if u.startswith(BASE + "/") else None
-    if rel is None:
-        failures.append(f"sitemap.xml: {u} is outside the site")
-        continue
-    f = ROOT / (rel + "index.html" if rel == "" or rel.endswith("/") else rel)
-    check(f.is_file(), f"sitemap.xml: {u} does not resolve to a file")
-# j. The privacy policy (hand written, not generated) says what the app does.
-POLICY = (ROOT / "privacy-policy.html").read_text(encoding="utf-8")
-for must in ("PostHog", "pairing service", "push notification", "Apple Health", "Screen recordings", "weekly count", "Nudges and reactions",
-             "turn analytics off in Settings", "does not record your screen", "Tapped-element details are not collected",
-             "Last updated: September 26, 2026", SITE["contact_email"]):
-    check(must in POLICY, f"privacy-policy.html: missing {must!r}")
-for stale in ("We do not collect any personal information", "do not use analytics", "do not have servers",
-              "does not integrate with any third-party analytics", "There is currently no switch",
-              "Session replay is turned on", "PostHog can record your sessions in the app as a series of screen images",
-              "Text fields are masked, but other text on the screen", "Last updated: September 24, 2026"):
-    check(stale.lower() not in POLICY.lower(), f"privacy-policy.html: still says {stale!r}")
-push = re.search(r"<h2>Push notifications</h2>(.*?)<h2>", POLICY, re.S)
-check(bool(push) and "have Premium and complete" in norm(re.sub(r"\s+", " ", push.group(1) if push else "")),
-      "privacy-policy.html: the Push notifications section does not say 'have Premium and complete'")
-
-# n. The support page (hand written) does not tie iCloud sync to Premium.
-SUPPORT = (ROOT / "support.html").read_text(encoding="utf-8")
-SUPPORT_TEXT = norm(htmlmod.unescape(re.sub(r"<[^>]+>", " ", SUPPORT)))
-for false_sentence in ("With Premium, iCloud sync keeps your habits synchronized across all your devices automatically.",
-                       "With Premium, iCloud sync keeps your habits in sync across all your iPhone and iPad devices.",
-                       "Your streak will reset, but don't worry!"):
-    check(false_sentence not in SUPPORT_TEXT, f"support.html: still says {false_sentence!r}")
-for s in sentences(re.sub(r"\s+", " ", SUPPORT_TEXT)):
-    if re.search(r"\biCloud\b", s) and re.search(r"\bPremium\b", s):
-        failures.append(f"support.html: a sentence ties iCloud to Premium: {s!r}")
-support_emails = emails_in(SUPPORT)
-check(support_emails == {SITE["contact_email"]}, f"support.html: email addresses {sorted(support_emails)}")
-
-policy_emails = emails_in(POLICY)
-check(policy_emails == {SITE["contact_email"]}, f"privacy-policy.html: email addresses {sorted(policy_emails)}")
-
-# k. The inline link form in pages.json never reaches a page unrendered.
-for rel, text in FRESH.items():
-    for m in re.finditer(r"\[[^\[\]\n]+\]\([^)\s]*\)", text):
-        failures.append(f"{rel}: inline link markup left unrendered: {m.group(0)!r}")
-
-check(FRESH["robots.txt"] == f"User-agent: *\nAllow: /\nSitemap: {PINNED_BASE_URL}/sitemap.xml\n", "robots.txt: content changed")
-
-# ---- Report ------------------------------------------------------------------
-counts: dict[str, int] = {}
-for value in DATES.values():
-    counts[str(value)] = counts.get(str(value), 0) + 1
-print("sitemap lastmod " + ", ".join(f"{d} ({n} entries)" for d, n in sorted(counts.items())))
-for line in contrast_lines:
-    print(line)
-for name, n in word_counts:
-    print(f"words  {n:5d}  {name}")
-for line in skip_lines:
-    print(line)
-for note in notes:
-    print(f"note   {note}")
 if failures:
     for f in failures:
         print(f"FAIL   {f}")
     print(f"{len(failures)} failure(s)")
     sys.exit(1)
-print(f"OK: {len(HTML_PAGES)} pages, {len(FRESH)} generated files, 0 failures")
+extra = (" byte equal to " + str(args.source) if args.source else "") + (" and to the live site" if args.live else "")
+print(f"OK: {len(MIRROR)} mirror pages{extra}, 0 failures")
