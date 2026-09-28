@@ -93,6 +93,7 @@ RETIRED_POLICY_SENTENCES = (
     "resets to zero and starts again with your next completion",
     "an evening streak-at-risk alert goes to your partner",
     "when a streak milestone is crossed", "an iPhone and iPad app only",
+    "estimate your approximate location",
 )
 # The support page answers the questions App Store reviewers and partners
 # arrive with, and gives the contact address as a link.
@@ -111,7 +112,9 @@ POLICY_MUST = ("PostHog", "pairing service", "push notification", "Apple Health"
                "Those recordings are deleted 30 days after they were made", "your IP address",
                "From version 4.5.3, you can turn analytics off", "Before it was turned off, PostHog could record sessions",
                "An invite nobody accepts is deleted the next time the pairing service runs its cleanup",
-               "These counters are not deleted")
+               "These counters are not deleted",
+               "your IP address, which reaches PostHog with each request; PostHog is set to discard it, and no location is derived from it",
+               "Last updated: September 28, 2026")
 
 failures: list[str] = []
 
